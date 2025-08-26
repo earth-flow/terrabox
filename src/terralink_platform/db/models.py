@@ -156,7 +156,7 @@ class Toolkit(Base):
     """Toolkit configuration and metadata."""
     __tablename__ = "toolkits"
     
-    id = Column(BigInteger, primary_key=True, autoincrement=True)
+    id = Column(Integer, primary_key=True, autoincrement=True)
     key = Column(String(64), unique=True, nullable=False)  # e.g., "github", "slack"
     name = Column(String(128), nullable=False)  # Display name
     description = Column(Text)
@@ -219,7 +219,7 @@ class ToolOverride(Base):
     """Per-connection tool overrides."""
     __tablename__ = "tool_overrides"
     
-    id = Column(BigInteger, primary_key=True)
+    id = Column(Integer, primary_key=True, autoincrement=True)
     connection_id = Column(get_uuid_type(), ForeignKey("connections.id", ondelete="CASCADE"), nullable=False)
     tool_key = Column(Text, nullable=False)
     enabled = Column(Boolean)  # NULL = inherit default

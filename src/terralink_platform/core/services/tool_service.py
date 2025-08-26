@@ -11,8 +11,6 @@ from ..tool_registry import ToolSpec
 from ...data import list_toolkits, get_tool, get_handler, list_tools
 from ..schemas import ToolSpecOut, ToolkitOut, ExecuteRequestIn, ExecuteResponseOut
 from ..tool_registry import get_tool_registry, ToolDefinition
-
-
 class ToolService:
     """Service for tool-related operations."""
     
@@ -125,6 +123,7 @@ class ToolService:
     async def execute_tool(db: Session, user_id: str, tool_slug: str, request: ExecuteRequestIn) -> ExecuteResponseOut:
         """Execute a tool with the given inputs."""
         from .connection_service import ConnectionService
+        from .tool_override_service import ToolOverrideService
         
         try:
             # Get tool definition
@@ -151,6 +150,28 @@ class ToolService:
                     return ExecuteResponseOut(
                         success=False,
                         error="No valid connection found for this tool"
+                    )
+            
+            # For tools that don't require connection, try to find any connection for the toolkit
+            # to check tool override settings
+            if not connection and app_key:
+                connection = ConnectionService.select_connection(db, user_id, app_key)
+            
+            # Check if tool is enabled (if any connection exists for the toolkit)
+            if connection:
+                # Get effective tools to check if this tool is enabled
+                effective_tools_data = ToolOverrideService.get_effective_tools(
+                    db=db,
+                    connection_id=str(connection.id),
+                    include_disabled=False  # Only get enabled tools
+                )
+                
+                # Check if the tool is in the enabled tools list
+                enabled_tool_keys = {tool['tool_key'] for tool in effective_tools_data['tools']}
+                if tool_slug not in enabled_tool_keys:
+                    return ExecuteResponseOut(
+                        success=False,
+                        error="Tool is disabled for this connection"
                     )
             
             # Get tool handler

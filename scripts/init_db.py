@@ -11,8 +11,8 @@ sys.path.insert(0, str(src_path))
 
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker
-from terralink_platform.config import settings
-from terralink_platform.db.models import Base, User, ApiKey, Plan, UserPlan
+from terralink_platform.core.utils.config import settings
+from terralink_platform.db.models import Base, User, ApiKey
 from terralink_platform.core.utils.auth import hash_password, generate_api_key, hash_api_key, generate_public_id
 from datetime import datetime
 
@@ -64,94 +64,22 @@ def create_test_data(engine):
     db = SessionLocal()
     
     try:
-        # Create test plans
-        plan_configs = [
-            {
-                "code": "free",
-                "name": "Free",
-                "features": {
-                    "description": "Free tier with basic features",
-                    "price_monthly": 0.0,
-                    "max_api_calls_per_month": 1000,
-                    "max_tools_per_user": 5,
-                    "basic_tools": True,
-                    "premium_tools": False
-                }
-            },
-            {
-                "code": "pro",
-                "name": "Pro",
-                "features": {
-                    "description": "Professional tier with advanced features",
-                    "price_monthly": 29.99,
-                    "max_api_calls_per_month": 10000,
-                    "max_tools_per_user": 50,
-                    "basic_tools": True,
-                    "premium_tools": True,
-                    "priority_support": True
-                }
-            },
-            {
-                "code": "enterprise",
-                "name": "Enterprise",
-                "features": {
-                    "description": "Enterprise tier with unlimited features",
-                    "price_monthly": 99.99,
-                    "max_api_calls_per_month": -1,  # Unlimited
-                    "max_tools_per_user": -1,  # Unlimited
-                    "basic_tools": True,
-                    "premium_tools": True,
-                    "priority_support": True,
-                    "custom_integrations": True
-                }
-            }
-        ]
-        
-        created_plans = []
-        for plan_config in plan_configs:
-            # Check if plan already exists
-            existing_plan = db.query(Plan).filter(Plan.code == plan_config["code"]).first()
-            if existing_plan:
-                print(f"Plan {plan_config['code']} already exists, skipping")
-                created_plans.append(existing_plan)
-                continue
-            
-            # Create new plan
-            plan = Plan(
-                code=plan_config["code"],
-                name=plan_config["name"],
-                features=plan_config["features"]
-            )
-            db.add(plan)
-            created_plans.append(plan)
-        
-        db.commit()
-        print("Created test plans")
-        
-        # Use created_plans instead of individual plan variables
-        free_plan = next(p for p in created_plans if p.code == "free")
-        pro_plan = next(p for p in created_plans if p.code == "pro")
-        enterprise_plan = next(p for p in created_plans if p.code == "enterprise")
-        
         # Create test users
         test_users = [
             {
                 "user_id": "testuser1",
                 "email": "test1@example.com",
-                "password": "password123",
-                "plan": free_plan
+                "password": "password123"
             },
             {
                 "user_id": "testuser2",
                 "email": "test2@example.com",
-                "password": "password123",
-                "plan": pro_plan
+                "password": "password123"
             },
             {
                 "user_id": "admin",
                 "email": "admin@example.com",
-                "password": "admin123",
-                "plan": enterprise_plan
+                "password": "admin123"
             }
         ]
         
@@ -179,18 +107,8 @@ def create_test_data(engine):
             db.commit()
             db.refresh(user)
             
-            # Assign plan to user
-            user_plan = UserPlan(
-                user_id_fk=user.id,
-                plan_id_fk=user_data["plan"].id,
-                active=True
-            )
-            db.add(user_plan)
-            
             created_users.append(user)
             print(f"Created user: {user.user_id} ({user.email})")
-        
-        db.commit()
         
         # Create API keys for test users
         for user in created_users:
@@ -219,27 +137,19 @@ def create_test_data(engine):
             print(f"Created API key for {user.user_id}: {api_key}")
         
         print("\n=== Test Data Summary ===")
-        print("Plans created:")
-        for plan in created_plans:
-            price = plan.features.get('price_monthly', 0)
-            print(f"  - {plan.name}: ${price}/month")
-        
-        print("\nTest users created:")
+        print("Users created:")
         for user in created_users:
-            user_plan = db.query(UserPlan).filter(
-                UserPlan.user_id_fk == user.id,
-                UserPlan.active == True
-            ).first()
-            plan_name = db.query(Plan).filter(Plan.id == user_plan.plan_id_fk).first().name if user_plan else "No plan"
-            
+            print(f"  - {user.user_id} ({user.email})")
+        
+        print("\nAPI Keys created:")
+        for user in created_users:
             api_keys = db.query(ApiKey).filter(
                 ApiKey.user_id_fk == user.id,
                 ApiKey.is_active == True
             ).all()
             
-            print(f"  - {user.user_id} ({user.email}) - Plan: {plan_name}")
             for api_key in api_keys:
-                print(f"    API Key: {api_key.secret_hash[:16]}...")
+                print(f"  - {user.user_id}: {api_key.public_id}")
         
     except Exception as e:
         print(f"Error creating test data: {e}")

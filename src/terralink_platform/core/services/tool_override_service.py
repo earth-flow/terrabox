@@ -65,7 +65,7 @@ class ToolOverrideService:
             )
             
             # Check if override is stale
-            is_stale = (
+            is_stale = bool(
                 override and 
                 override.resolved_digest and 
                 override.resolved_digest != tool_def.digest
@@ -78,7 +78,7 @@ class ToolOverrideService:
                 "input_schema": tool_def.input_schema,
                 "enabled": enabled,
                 "config": config,
-                "version": tool_def.version,
+                "version": getattr(tool_def, 'version', None),
                 "digest": tool_def.digest,
                 "is_stale": is_stale,
                 "required_scopes": tool_def.required_scopes
@@ -139,7 +139,7 @@ class ToolOverrideService:
                 override.enabled = enabled
             if config is not None:
                 override.config = config
-            override.tool_version = tool_def.version
+            override.tool_version = None  # ToolDefinition doesn't have version attribute
             override.resolved_digest = tool_def.digest
             override.is_stale = False
         else:
@@ -149,11 +149,12 @@ class ToolOverrideService:
                 tool_key=tool_key,
                 enabled=enabled,
                 config=config or {},
-                tool_version=tool_def.version,
+                tool_version=None,  # ToolDefinition doesn't have version attribute
                 resolved_digest=tool_def.digest,
                 is_stale=False
             )
             db.add(override)
+            db.flush()  # This will assign the ID
         
         db.commit()
         db.refresh(override)

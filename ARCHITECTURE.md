@@ -8,7 +8,15 @@ terralink_platform/
 │   ├── core/                    # Core business logic
 │   │   ├── __init__.py
 │   │   ├── schemas.py          # API request/response models
-│   │   └── services.py         # Business logic services
+│   │   ├── services/           # Business logic services
+│   │   │   ├── __init__.py
+│   │   │   ├── auth_service.py
+│   │   │   ├── connection_service.py
+│   │   │   ├── tool_service.py
+│   │   │   └── tool_override_service.py
+│   │   └── utils/              # Utility functions
+│   │       ├── __init__.py
+│   │       └── config.py       # Application configuration
 │   ├── db/                     # Database layer
 │   │   ├── __init__.py
 │   │   ├── models.py           # SQLAlchemy ORM models
@@ -16,23 +24,19 @@ terralink_platform/
 │   ├── routers/                # API route handlers
 │   │   ├── __init__.py
 │   │   ├── auth.py             # Authentication endpoints
+│   │   ├── connections.py      # Connection management endpoints
 │   │   ├── deps.py             # Dependency injection
 │   │   └── tools.py            # Tool management endpoints
-│   ├── services/               # External service integrations
-│   │   ├── __init__.py
-│   │   └── auth_service.py     # Authentication service
 │   ├── toolkits/               # Tool implementations
 │   │   ├── __init__.py
 │   │   ├── example.py
 │   │   └── github.py
-│   ├── config.py               # Application configuration
 │   ├── data.py                 # Data access layer
 │   ├── extensions.py           # Plugin system
-│   ├── main.py                 # Application entry point
-│   ├── models.py               # Core domain models (Pydantic)
-│   ├── rate_limit.py           # Rate limiting
-│   └── security.py             # Security utilities
-└── tests/                      # Test suite
+│   └── main.py                 # Application entry point
+├── tests/                      # Test files
+├── scripts/                    # Utility scripts
+└── docs/                       # Documentation
 ```
 
 ## Architecture Principles
@@ -66,13 +70,15 @@ The platform provides two distinct API interfaces:
 
 ### 3. Data Models
 
-#### Core Domain Models (`models.py`)
+#### Core Domain Models (`db/models.py`)
 - `User`: Platform users
-- `Connection`: OAuth connection attempts
-- `ConnectedAccount`: Third-party account connections
-- `ToolSpec`: Tool specifications
-- `ExecuteRequest/Response`: Tool execution contracts
-- `Toolkit`: Tool groupings
+- `ApiKey`: API key management
+- `ToolExecution`: Tool execution history and results
+- `Connection`: External service connections
+- `OAuthProvider`: OAuth provider configurations
+- `Toolkit`: Toolkit configurations and metadata
+- `ToolOverride`: Tool override configurations
+- `OAuthState`: OAuth state management
 
 #### API Schemas (`core/schemas.py`)
 - `ToolSpecOut`: Tool specification API response
@@ -153,9 +159,10 @@ The platform provides two distinct API interfaces:
 
 ### Database Changes
 1. Update ORM models in `db/models.py`
-2. Create Alembic migrations
-3. Update corresponding domain models if needed
-4. Test migration scripts
+2. Update API schemas in `core/schemas.py` if needed
+3. Generate migration: `alembic revision --autogenerate -m "description"`
+4. Review and edit the generated migration file
+5. Apply migration: `alembic upgrade head`
 
 ### Testing
 - Unit tests for business logic
