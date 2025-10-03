@@ -17,6 +17,7 @@ Requires-Dist: email-validator>=2.1
 Requires-Dist: python-dotenv>=1.0
 Requires-Dist: redis>=5.0
 Requires-Dist: cryptography>=41.0.0
+Requires-Dist: PyGithub>=1.59.0
 Provides-Extra: dev
 Requires-Dist: pytest; extra == "dev"
 Requires-Dist: httpx; extra == "dev"
