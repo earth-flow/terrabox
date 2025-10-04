@@ -662,4 +662,50 @@ def oauth_callback(
         )
 
 
+@gui_router.get("/toolkits/{toolkit_key}/stats")
+def get_toolkit_connection_stats(
+    toolkit_key: str,
+    current_user: m.User = Depends(current_user_from_jwt),
+    db: Session = Depends(get_db)
+):
+    """Get connection statistics for a toolkit."""
+    # Verify toolkit exists
+    toolkit = db.query(m.Toolkit).filter(
+        m.Toolkit.key == toolkit_key, 
+        m.Toolkit.is_active == True
+    ).first()
+    if not toolkit:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Toolkit not found"
+        )
+    
+    # Count total connections
+    total_connections = db.query(m.Connection).filter(
+        m.Connection.toolkit_id == toolkit.id
+    ).count()
+    
+    # Count valid and enabled connections
+    valid_connections = db.query(m.Connection).filter(
+        m.Connection.toolkit_id == toolkit.id,
+        m.Connection.status == m.ConnectionStatus.valid,
+        m.Connection.enabled == True
+    ).count()
+    
+    # Count unique users with valid connections
+    unique_users = db.query(m.Connection.user_id).filter(
+        m.Connection.toolkit_id == toolkit.id,
+        m.Connection.status == m.ConnectionStatus.valid,
+        m.Connection.enabled == True
+    ).distinct().count()
+    
+    return {
+        "toolkit_key": toolkit_key,
+        "toolkit_name": toolkit.name,
+        "total_connections": total_connections,
+        "valid_connections": valid_connections,
+        "unique_users": unique_users
+    }
+
+
 __all__ = ["sdk_router", "gui_router", "common_router"]
