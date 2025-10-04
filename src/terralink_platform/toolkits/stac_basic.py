@@ -186,9 +186,24 @@ def stac_search_handler(arguments: dict, context: dict, account=None) -> Dict[st
     items = list(item_collection)
 
     minimal = _items_to_minimal(items, asset_keys=asset_keys)
+    # Ensure 'matched' is a JSON-serializable value
+    matched_val = None
+    try:
+        m = getattr(search, "matched", None)
+        matched_val = m() if callable(m) else m
+    except Exception:
+        matched_val = None
+
+    if matched_val is None:
+        try:
+            m2 = getattr(item_collection, "matched", None)
+            matched_val = m2() if callable(m2) else m2
+        except Exception:
+            matched_val = None
+
     return {
         "items_minimal": minimal,
-        "matched": getattr(search, "matched", None) or getattr(item_collection, "matched", None)
+        "matched": matched_val
     }
 
 
