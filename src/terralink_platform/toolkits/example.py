@@ -72,7 +72,7 @@ def setup(registrar):
             },
             "required": []
         },
-        requires_connection=False
+        requires_connection=True
     )
     registrar.tool(echo_spec, echo_handler)
     

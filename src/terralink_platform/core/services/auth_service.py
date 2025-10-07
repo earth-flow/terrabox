@@ -1,5 +1,7 @@
 """Authentication service for user management and API key operations."""
 import uuid
+import re
+import logging
 from datetime import datetime
 from typing import Optional
 from sqlalchemy.orm import Session
@@ -12,6 +14,9 @@ from ..utils.auth import (
     hash_password, verify_password, verify_token, 
     generate_api_key, hash_api_key, generate_public_id
 )
+
+
+logger = logging.getLogger(__name__)
 
 
 class AuthService:
@@ -120,7 +125,8 @@ class AuthService:
                 ApiKey.is_active == True
             ).first()
             
-            if not db_api_key:
+            # 必须存在有效的API Key且关联的用户为活跃状态
+            if not db_api_key or not getattr(db_api_key, "user", None) or not db_api_key.user.is_active:
                 return None
             
             # 更新最后使用时间
@@ -136,13 +142,20 @@ class AuthService:
     @staticmethod
     def get_current_user_from_api_key(db: Session, api_key: str) -> User:
         """Get current user from API key header."""
-        if not api_key:
+        if not api_key or not api_key.strip():
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="API key required"
             )
+        # 规范化并校验API Key格式，避免意外的宽松匹配或空白字符串绕过
+        normalized_key = api_key.strip()
+        if not re.match(r"^tlk_(live|test)_[A-Za-z0-9_\-]{16,}$", normalized_key):
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid API key format"
+            )
         
-        user = AuthService.verify_api_key(db, api_key)
+        user = AuthService.verify_api_key(db, normalized_key)
         if not user:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
