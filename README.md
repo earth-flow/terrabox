@@ -1,6 +1,6 @@
-# Terralink Platform
+# Terrakit Platform
 
-Terralink Platform是一个基于FastAPI的后端服务，为Terralink SDK提供API支持。该平台提供用户认证、工具管理、API密钥管理等核心功能。
+Terrakit Platform是一个基于FastAPI的后端服务，为Terrakit SDK提供API支持。该平台提供用户认证、工具管理、API密钥管理等核心功能。
 
 ## 功能特性
 
@@ -37,7 +37,7 @@ Terralink Platform是一个基于FastAPI的后端服务，为Terralink SDK提供
 ```bash
 # 方式1：从Git仓库克隆（推荐）
 git clone <repository-url>
-cd terralink_platform
+cd terrakit_platform
 
 # 方式2：下载源码包
 # 下载并解压源码包到本地目录
@@ -66,7 +66,7 @@ pip install -e .
 pip install -e ".[dev]"
 
 # 验证安装
-python -c "import terralink_platform; print('安装成功！')"
+python -c "import terrakit; print('安装成功！')"
 ```
 
 ### 第四步：环境配置
@@ -83,9 +83,9 @@ cp .env.example .env  # 如果存在模板文件
 # 数据库配置
 # ===================
 # 开发环境使用SQLite
-TL_DB_URL=sqlite:///./terralink_platform.db
+TL_DB_URL=sqlite:///./terrakit_platform.db
 # 生产环境使用PostgreSQL
-# TL_DB_URL=postgresql://username:password@localhost:5432/terralink_db
+# TL_DB_URL=postgresql://username:password@localhost:5432/terrakit_db
 
 # ===================
 # 安全配置
@@ -125,20 +125,20 @@ GOOGLE_OAUTH_CLIENT_SECRET=your_google_client_secret
 python scripts/init_db.py
 
 # 验证数据库
-python -c "from terralink_platform.db.session import engine; print('数据库连接成功！')"
+python -c "from terrakit.db.session import engine; print('数据库连接成功！')"
 ```
 
 ### 第六步：启动服务
 
 ```bash
 # 开发模式（推荐，支持热重载）
-uvicorn src.terralink_platform.main:app --reload --host 0.0.0.0 --port 8000
+uvicorn src.terrakit.main:app --reload --host 0.0.0.0 --port 8000
 
 # 生产模式
-uvicorn src.terralink_platform.main:app --host 0.0.0.0 --port 8000 --workers 4
+uvicorn src.terrakit.main:app --host 0.0.0.0 --port 8000 --workers 4
 
 # 后台运行
-nohup uvicorn src.terralink_platform.main:app --host 0.0.0.0 --port 8000 > server.log 2>&1 &
+nohup uvicorn src.terrakit.main:app --host 0.0.0.0 --port 8000 > server.log 2>&1 &
 ```
 
 ### 第七步：验证安装
@@ -284,7 +284,7 @@ curl -X GET "http://localhost:8000/v1/connections" \
 
 #### 安装Python客户端
 ```bash
-pip install terralink-client  # 如果有独立客户端包
+pip install terrakit-client  # 如果有独立客户端包
 # 或直接使用requests
 pip install requests
 ```
@@ -294,7 +294,7 @@ pip install requests
 import requests
 import json
 
-class TerralinkClient:
+class TerrakitClient:
     def __init__(self, base_url="http://localhost:8000", api_key=None):
         self.base_url = base_url
         self.api_key = api_key
@@ -374,7 +374,7 @@ class TerralinkClient:
         return response.json()
 
 # 使用示例
-client = TerralinkClient()
+client = TerrakitClient()
 
 # 注册用户
 result = client.register("user@example.com", "SecurePassword123!")
@@ -389,7 +389,7 @@ api_key_result = client.create_api_key(jwt_token, "My Python Client")
 api_key = api_key_result["key"]
 
 # 使用API Key创建新客户端
-api_client = TerralinkClient(api_key=api_key)
+api_client = TerrakitClient(api_key=api_key)
 
 # 获取工具列表
 tools = api_client.list_tools()
@@ -425,8 +425,8 @@ if "id" in new_connection:
 ### 项目结构
 
 ```
-terralink_platform/
-├── src/terralink_platform/
+terrakit_platform/
+├── src/terrakit/
 │   ├── main.py              # FastAPI应用入口
 │   ├── data.py              # 工具注册和管理
 │   ├── extensions.py        # 扩展加载器
@@ -464,7 +464,7 @@ python test_security_features.py
 
 ### 添加新工具
 
-1. 在 `src/terralink_platform/toolkits/` 下创建新的工具模块
+1. 在 `src/terrakit/toolkits/` 下创建新的工具模块
 2. 实现工具接口
 3. 在 `extensions.py` 中注册工具
 
@@ -499,7 +499,7 @@ COPY . .
 RUN pip install -e .
 
 EXPOSE 8000
-CMD ["uvicorn", "src.terralink_platform.main:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["uvicorn", "src.terrakit.main:app", "--host", "0.0.0.0", "--port", "8000"]
 ```
 
 ### 生产环境配置
@@ -565,12 +565,12 @@ pip install -e .
 #### 1. 数据库连接失败
 ```bash
 # 检查数据库文件权限（SQLite）
-ls -la terralink_platform.db
-chmod 664 terralink_platform.db  # 如果权限不足
+ls -la terrakit_platform.db
+chmod 664 terrakit_platform.db  # 如果权限不足
 
 # 测试数据库连接
 python -c "
-from terralink_platform.db.session import engine
+from terrakit.db.session import engine
 from sqlalchemy import text
 with engine.connect() as conn:
     result = conn.execute(text('SELECT 1'))
@@ -578,7 +578,7 @@ with engine.connect() as conn:
 "
 
 # PostgreSQL连接测试
-psql -h localhost -U username -d terralink_db -c "SELECT 1;"
+psql -h localhost -U username -d terrakit_db -c "SELECT 1;"
 ```
 
 #### 2. 端口被占用
@@ -592,14 +592,14 @@ lsof -i :8000
 kill -9 <PID>
 
 # 使用其他端口启动
-uvicorn src.terralink_platform.main:app --port 8001
+uvicorn src.terrakit.main:app --port 8001
 ```
 
 #### 3. JWT Token问题
 ```bash
 # 检查JWT配置
 python -c "
-from terralink_platform.core.utils.config import get_settings
+from terrakit.core.utils.config import get_settings
 settings = get_settings()
 print('JWT Secret长度:', len(settings.jwt_secret))
 print('JWT Secret:', settings.jwt_secret[:10] + '...')
@@ -617,8 +617,8 @@ curl -v -X GET "http://localhost:8000/v1/tools" \
 
 # 检查API Key是否存在
 python -c "
-from terralink_platform.db.session import SessionLocal
-from terralink_platform.db.models import APIKey
+from terrakit.db.session import SessionLocal
+from terrakit.db.models import APIKey
 with SessionLocal() as db:
     keys = db.query(APIKey).all()
     for key in keys:
@@ -640,7 +640,7 @@ htop  # 如果已安装
 
 # 启用调试模式查看详细日志
 export TL_ENV=dev
-uvicorn src.terralink_platform.main:app --reload --log-level debug
+uvicorn src.terrakit.main:app --reload --log-level debug
 ```
 
 #### 2. 内存使用过高
@@ -649,7 +649,7 @@ uvicorn src.terralink_platform.main:app --reload --log-level debug
 ps aux | grep uvicorn
 
 # 减少worker数量
-uvicorn src.terralink_platform.main:app --workers 1
+uvicorn src.terrakit.main:app --workers 1
 
 # 使用内存分析工具
 pip install memory-profiler
@@ -678,20 +678,20 @@ echo "TL_LOG_LEVEL=DEBUG" >> .env
 
 # 或临时启用
 export TL_LOG_LEVEL=DEBUG
-uvicorn src.terralink_platform.main:app --reload
+uvicorn src.terrakit.main:app --reload
 ```
 
 #### 数据库调试
 ```bash
 # SQLite调试
-sqlite3 terralink_platform.db
+sqlite3 terrakit_platform.db
 .tables
 .schema users
 SELECT * FROM users LIMIT 5;
 .quit
 
 # PostgreSQL调试
-psql -h localhost -U username -d terralink_db
+psql -h localhost -U username -d terrakit_db
 \dt
 \d users
 SELECT * FROM users LIMIT 5;

@@ -11,9 +11,9 @@ sys.path.insert(0, str(src_path))
 
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker
-from terralink_platform.core.utils.config import settings
-from terralink_platform.db.models import Base, User, ApiKey
-from terralink_platform.core.utils.auth import hash_password, generate_api_key, hash_api_key, generate_public_id
+from terrakit.core.utils.config import settings
+from terrakit.db.models import Base, User, ApiKey
+from terrakit.core.utils.auth import hash_password, generate_api_key, hash_api_key, generate_public_id
 from datetime import datetime
 
 
@@ -173,7 +173,7 @@ def main():
         
         print("\nDatabase initialization completed successfully!")
         print("\nYou can now:")
-        print("1. Start the server: uvicorn terralink_platform.main:app --reload")
+        print("1. Start the server: uvicorn terrakit.main:app --reload")
         print("2. Test user registration and login with the created test users")
         print("3. Use the API keys for SDK testing")
         
