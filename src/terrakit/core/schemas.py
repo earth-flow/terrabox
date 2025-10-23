@@ -7,7 +7,7 @@ from enum import Enum
 
 # OAuth-related schemas
 class OAuthUserInfo(BaseModel):
-    """OAuth用户信息模型"""
+    """OAuth user information model"""
     oauth_user_id: str
     email: str
     display_name: str
@@ -19,19 +19,19 @@ class OAuthUserInfo(BaseModel):
 
 # User-related schemas
 class UserCreate(BaseModel):
-    """用户创建请求模型"""
+    """User creation request model"""
     email: str = Field(..., pattern=r'^[^@]+@[^@]+\.[^@]+$')
     password: str = Field(..., min_length=8)
 
 
 class UserLogin(BaseModel):
-    """用户登录请求模型"""
+    """User login request model"""
     email: str
     password: str
 
 
 class UserResponse(BaseModel):
-    """用户响应模型"""
+    """User response model"""
     id: str
     user_id: str
     email: str
@@ -54,7 +54,7 @@ class UserResponse(BaseModel):
 
 
 class TokenResponse(BaseModel):
-    """JWT令牌响应模型"""
+    """JWT token response model"""
     access_token: str
     token_type: str = "bearer"
     expires_in: int
@@ -62,13 +62,13 @@ class TokenResponse(BaseModel):
 
 
 class ApiKeyCreate(BaseModel):
-    """API密钥创建请求模型"""
+    """API key creation request model"""
     label: str = Field(..., min_length=1, max_length=100)
     prefix: str = Field(default="live", pattern="^(test|live)$")
 
 
 class ApiKeyResponse(BaseModel):
-    """API密钥响应模型"""
+    """API key response model"""
     id: int
     name: str
     key: Optional[str] = None  # Only returned once during creation
@@ -79,7 +79,7 @@ class ApiKeyResponse(BaseModel):
 
 
 class OAuthProviderResponse(BaseModel):
-    """OAuth提供商响应模型"""
+    """OAuth provider response model"""
     id: int
     name: str
     display_name: str
@@ -103,27 +103,27 @@ class OAuthProviderResponse(BaseModel):
 
 
 class OAuthAuthRequest(BaseModel):
-    """OAuth认证请求模型"""
+    """OAuth authentication request model"""
     provider: str
     redirect_uri: str
     state: Optional[str] = None
 
 
 class OAuthAuthResponse(BaseModel):
-    """OAuth认证响应模型"""
+    """OAuth authentication response model"""
     auth_url: str
     state: str
 
 
 class OAuthCallbackRequest(BaseModel):
-    """OAuth回调请求模型"""
+    """OAuth callback request model"""
     provider: str
     code: str
     state: Optional[str] = None
 
 
 class UserOAuthAccountResponse(BaseModel):
-    """用户OAuth账户响应模型"""
+    """User OAuth account response model"""
     id: int
     provider_name: str
     provider_display_name: str

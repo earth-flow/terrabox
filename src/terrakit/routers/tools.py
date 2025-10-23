@@ -12,7 +12,7 @@ from ..core.schemas import (
 from ..core.services import ToolService
 
 
-# 小型去重：提取私有助手以复用 SDK/GUI 逻辑
+# Small deduplication: Extract private helpers to reuse SDK/GUI logic
 
 def _get_tools_with_status(db: Session, user_id: str) -> list[ToolSpecOut]:
     return ToolService.get_tools_with_status(db, user_id)

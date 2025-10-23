@@ -555,7 +555,7 @@ def main():
     
     print("✅ Remove deactivated API key passed")
     
-    # 在现有测试完成后添加工具测试
+    # Add tool tests after existing tests are completed
     if api_key_response:
         api_key = api_key_response["key"]
         

@@ -23,7 +23,7 @@ def init_db():
     In production, use Alembic migrations.
     """
     if settings.ENV == "dev":
-        Base.metadata.create_all(bind=engine)  # 生产用 Alembic
+        Base.metadata.create_all(bind=engine)  # Use Alembic in production
 
 
 @asynccontextmanager

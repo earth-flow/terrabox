@@ -24,8 +24,8 @@ class AuthService:
     
     @staticmethod
     def create_user(db: Session, user_create: UserCreate) -> User:
-        """创建新用户"""
-        # 检查用户是否已存在
+        """Create new user"""
+        # Check if user already exists
         existing_user = db.query(User).filter(User.email == user_create.email).first()
         
         if existing_user:
@@ -34,10 +34,10 @@ class AuthService:
                 detail="Email already registered"
             )
         
-        # 创建新用户
+        # Create new user
         hashed_password = hash_password(user_create.password)
         db_user = User(
-            user_id=str(uuid.uuid4()),  # 生成唯一的UUID作为user_id
+            user_id=str(uuid.uuid4()),  # Generate unique UUID as user_id
             email=user_create.email,
             password_hash=hashed_password,
             is_active=True
@@ -51,7 +51,7 @@ class AuthService:
     
     @staticmethod
     def authenticate_user(db: Session, user_login: UserLogin) -> Optional[User]:
-        """验证用户凭据"""
+        """Verify user credentials"""
         user = db.query(User).filter(User.email == user_login.email).first()
         
         if not user or not verify_password(user_login.password, user.password_hash):
@@ -61,7 +61,7 @@ class AuthService:
     
     @staticmethod
     def get_current_user(db: Session, credentials: HTTPAuthorizationCredentials) -> User:
-        """获取当前认证用户"""
+        """Get current authenticated user"""
         token = credentials.credentials
         payload = verify_token(token)
         
@@ -80,7 +80,7 @@ class AuthService:
                 headers={"WWW-Authenticate": "Bearer"},
             )
         
-        # JWT token中的sub字段是user_id（字符串），不是数据库的id（整数）
+        # The sub field in JWT token is user_id (string), not database id (integer)
         user = db.query(User).filter(User.user_id == user_id_str).first()
         if user is None:
             raise HTTPException(
@@ -93,7 +93,7 @@ class AuthService:
     
     @staticmethod
     def create_user_api_key(db: Session, user_id: int, name: str) -> ApiKey:
-        """为用户创建API密钥"""
+        """Create API key for user"""
         api_key = generate_api_key()
         hashed_key = hash_api_key(api_key)
         public_id = generate_public_id()
@@ -110,13 +110,13 @@ class AuthService:
         db.commit()
         db.refresh(db_api_key)
         
-        # 返回原始API密钥（仅此一次）
+        # Return original API key (only this once)
         db_api_key.key = api_key
         return db_api_key
     
     @staticmethod
     def verify_api_key(db: Session, api_key: str) -> Optional[User]:
-        """验证API密钥并返回关联用户"""
+        """Verify API key and return associated user"""
         try:
             hashed_key = hash_api_key(api_key)
             
@@ -125,11 +125,11 @@ class AuthService:
                 ApiKey.is_active == True
             ).first()
             
-            # 必须存在有效的API Key且关联的用户为活跃状态
+            # Must have valid API Key and associated user must be active
             if not db_api_key or not getattr(db_api_key, "user", None) or not db_api_key.user.is_active:
                 return None
             
-            # 更新最后使用时间
+            # Update last used time
             db_api_key.last_used_at = datetime.utcnow()
             db.commit()
             
@@ -147,7 +147,7 @@ class AuthService:
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="API key required"
             )
-        # 规范化并校验API Key格式，避免意外的宽松匹配或空白字符串绕过
+        # Normalize and validate API Key format to avoid accidental loose matching or empty string bypass
         normalized_key = api_key.strip()
         if not re.match(r"^tlk_(live|test)_[A-Za-z0-9_\-]{16,}$", normalized_key):
             raise HTTPException(
@@ -166,6 +166,6 @@ class AuthService:
     
     @staticmethod
     def get_user_by_email(db: Session, email: str) -> Optional[User]:
-        """根据邮箱查询用户完整信息"""
+        """Query user complete information by email"""
         user = db.query(User).filter(User.email == email).first()
         return user

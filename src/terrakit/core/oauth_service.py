@@ -1,10 +1,10 @@
-"""OAuth认证服务
+"""OAuth authentication service
 
-提供Google和GitHub OAuth认证的核心功能，包括：
-- OAuth认证URL生成
-- 授权码交换访问令牌
-- 用户信息获取
-- OAuth账户管理
+Provides core functionality for Google and GitHub OAuth authentication, including:
+- OAuth authentication URL generation
+- Authorization code exchange for access tokens
+- User information retrieval
+- OAuth account management
 """
 
 import secrets
@@ -25,18 +25,18 @@ from .utils.config import settings
 
 
 class OAuthService:
-    """OAuth认证服务类"""
+    """OAuth authentication service class"""
     
     @staticmethod
     def _encrypt_token(token: str) -> str:
-        """安全加密单个令牌"""
+        """Securely encrypt single token"""
         if not token:
             return ""
         return encrypt_credentials({"token": token})
     
     @staticmethod
     def _decrypt_token(encrypted_token: str) -> str:
-        """解密单个令牌"""
+        """Decrypt single token"""
         if not encrypted_token:
             return ""
         try:
@@ -45,7 +45,7 @@ class OAuthService:
         except Exception:
             return ""
     
-    # OAuth提供商配置
+    # OAuth provider configuration
     PROVIDERS = {
         "google": {
             "auth_url": "https://accounts.google.com/o/oauth2/v2/auth",
@@ -63,7 +63,7 @@ class OAuthService:
     
     @classmethod
     def get_provider(cls, db: Session, provider_name: str) -> Optional[m.OAuthProvider]:
-        """获取OAuth提供商配置"""
+        """Get OAuth provider configuration"""
         return db.query(m.OAuthProvider).filter(
             m.OAuthProvider.name == provider_name,
             m.OAuthProvider.is_active == True
@@ -71,10 +71,10 @@ class OAuthService:
     
     @classmethod
     def generate_auth_url(cls, db: Session, provider_name: str, redirect_uri: str) -> tuple[str, str]:
-        """生成OAuth认证URL
+        """Generate OAuth authentication URL
         
         Returns:
-            tuple: (auth_url, state) - 认证URL和状态参数
+            tuple: (auth_url, state) - Authentication URL and state parameter
         """
         provider = cls.get_provider(db, provider_name)
         if not provider:
@@ -83,10 +83,10 @@ class OAuthService:
                 detail=f"Unsupported OAuth provider: {provider_name}"
             )
         
-        # 生成随机状态参数防止CSRF攻击
+        # Generate random state parameter to prevent CSRF attacks
         state = secrets.token_urlsafe(32)
         
-        # 构建认证URL参数
+        # Build authentication URL parameters
         params = {
             "client_id": provider.client_id,
             "redirect_uri": redirect_uri,
@@ -101,19 +101,19 @@ class OAuthService:
     @classmethod
     async def exchange_code_for_token(cls, db: Session, provider_name: str, 
                                     code: str, redirect_uri: str) -> Dict[str, Any]:
-        """用授权码交换访问令牌"""
+        """Use authorization code to exchange for access token"""
         import logging
         logger = logging.getLogger(__name__)
         
         provider = cls.get_provider(db, provider_name)
         if not provider:
-            logger.error(f"不支持的OAuth提供商: {provider_name}")
+            logger.error(f"Unsupported OAuth provider: {provider_name}")
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=f"Unsupported OAuth provider: {provider_name}"
             )
         
-        # 准备令牌交换请求
+        # Prepare token exchange request
         token_data = {
             "client_id": provider.client_id,
             "client_secret": provider.client_secret,
@@ -127,7 +127,7 @@ class OAuthService:
             "Content-Type": "application/x-www-form-urlencoded"
         }
         
-        logger.info(f"向{provider_name}发送令牌交换请求: {provider.token_url}")
+        logger.info(f"Sending token exchange request to {provider_name}: {provider.token_url}")
         
         async with httpx.AsyncClient() as client:
             try:
@@ -137,17 +137,17 @@ class OAuthService:
                     headers=headers
                 )
                 
-                logger.info(f"{provider_name}令牌交换响应: status={response.status_code}")
+                logger.info(f"{provider_name} token exchange response: status={response.status_code}")
                 
                 if response.status_code != 200:
                     error_text = response.text
-                    logger.error(f"{provider_name}令牌交换失败: status={response.status_code}, response={error_text}")
+                    logger.error(f"{provider_name} token exchange failed: status={response.status_code}, response={error_text}")
                     
-                    # 检查是否是授权码已使用的错误
+                    # Check if error is related to invalid grant
                     if "invalid_grant" in error_text or "authorization code" in error_text.lower():
                         raise HTTPException(
                             status_code=status.HTTP_400_BAD_REQUEST,
-                            detail="授权码无效或已被使用，这可能是由于重复请求导致的"
+                            detail="Authorization code is invalid or already used, this may be due to repeated request"
                         )
                     else:
                         raise HTTPException(
@@ -156,11 +156,11 @@ class OAuthService:
                         )
                 
                 token_response = response.json()
-                logger.info(f"{provider_name}令牌交换成功")
+                logger.info(f"{provider_name} token exchange successful")
                 return token_response
                 
             except httpx.RequestError as e:
-                logger.error(f"{provider_name}令牌交换网络错误: {str(e)}")
+                logger.error(f"{provider_name} token exchange network error: {str(e)}")
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
                     detail=f"Network error during token exchange: {str(e)}"
@@ -168,7 +168,7 @@ class OAuthService:
     
     @classmethod
     async def get_user_info(cls, db: Session, provider_name: str, access_token: str) -> OAuthUserInfo:
-        """获取OAuth用户信息"""
+        """Get OAuth user information"""
         provider = cls.get_provider(db, provider_name)
         if not provider:
             raise HTTPException(
@@ -195,7 +195,7 @@ class OAuthService:
             
             user_data = response.json()
             
-            # 根据不同提供商解析用户信息
+            # Parse user information according to different providers
             if provider_name == "google":
                 return OAuthUserInfo(
                     oauth_user_id=user_data["id"],
@@ -204,7 +204,7 @@ class OAuthService:
                     avatar_url=user_data.get("picture")
                 )
             elif provider_name == "github":
-                # GitHub可能需要额外请求获取邮箱
+                # GitHub may need extra request to get email
                 email = user_data.get("email")
                 if not email:
                     email_response = await client.get(
@@ -232,7 +232,7 @@ class OAuthService:
     @classmethod
     def create_or_update_oauth_account(cls, db: Session, user_id: int, provider_name: str,
                                      oauth_user_info: OAuthUserInfo, token_data: Dict[str, Any]) -> m.UserOAuthAccount:
-        """创建或更新OAuth账户关联"""
+        """Create or update OAuth account association"""
         provider = cls.get_provider(db, provider_name)
         if not provider:
             raise HTTPException(
@@ -240,18 +240,18 @@ class OAuthService:
                 detail=f"Unsupported OAuth provider: {provider_name}"
             )
         
-        # 查找现有的OAuth账户
+        # Look for existing OAuth account
         oauth_account = db.query(m.UserOAuthAccount).filter(
             m.UserOAuthAccount.provider_id_fk == provider.id,
             m.UserOAuthAccount.oauth_user_id == oauth_user_info.oauth_user_id
         ).first()
         
-        # 计算令牌过期时间
-        expires_in = token_data.get("expires_in", 3600)  # 默认1小时
+        # Compute token expiration time
+        expires_in = token_data.get("expires_in", 3600)  # Default 1 hour
         token_expires_at = datetime.utcnow() + timedelta(seconds=expires_in)
         
         if oauth_account:
-            # 更新现有账户
+            # Update existing account
             oauth_account.user_id_fk = user_id
             oauth_account.email = oauth_user_info.email
             oauth_account.display_name = oauth_user_info.display_name
@@ -262,7 +262,7 @@ class OAuthService:
             oauth_account.token_expires_at = token_expires_at
             oauth_account.updated_at = datetime.utcnow()
         else:
-            # 创建新的OAuth账户
+            # Create new OAuth account
             oauth_account = m.UserOAuthAccount(
                 user_id_fk=user_id,
                 provider_id_fk=provider.id,
@@ -273,7 +273,7 @@ class OAuthService:
                 access_token=cls._encrypt_token(token_data["access_token"]),
                 refresh_token=cls._encrypt_token(token_data.get("refresh_token", "")),
                 token_expires_at=token_expires_at,
-                is_primary=False  # 默认不是主要登录方式
+                is_primary=False  # Default is not primary login method
             )
             db.add(oauth_account)
         
@@ -283,7 +283,7 @@ class OAuthService:
     
     @classmethod
     def find_user_by_oauth(cls, db: Session, provider_name: str, oauth_user_id: str) -> Optional[m.User]:
-        """通过OAuth信息查找用户"""
+        """Find user by OAuth information"""
         provider = cls.get_provider(db, provider_name)
         if not provider:
             return None
@@ -300,7 +300,7 @@ class OAuthService:
     
     @classmethod
     def get_user_oauth_accounts(cls, db: Session, user_id: int) -> list[m.UserOAuthAccount]:
-        """获取用户的所有OAuth账户"""
+        """Get user's all OAuth accounts"""
         return db.query(m.UserOAuthAccount).filter(
             m.UserOAuthAccount.user_id_fk == user_id
         ).all()

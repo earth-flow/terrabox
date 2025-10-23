@@ -208,19 +208,19 @@ class ToolService:
             if request.metadata:
                 context.update(request.metadata)
             
-            # Execute the tool (支持异步handler)
+            # Execute the tool (supports async handlers)
             # Check handler signature to determine if it accepts connection parameter
             sig = inspect.signature(handler)
             accepts_connection = len(sig.parameters) >= 3
             
             if inspect.iscoroutinefunction(handler):
-                # 异步handler
+                # Async handler
                 if accepts_connection:
                     result_data = await handler(request.inputs or {}, context, connection)
                 else:
                     result_data = await handler(request.inputs or {}, context)
             else:
-                # 同步handler
+                # Sync handler
                 if accepts_connection:
                     result_data = handler(request.inputs or {}, context, connection)
                 else:

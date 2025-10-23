@@ -85,7 +85,7 @@ def register_user(request: Request, user_data: UserCreate, db: Session = Depends
 
 @common_router.post("/login", response_model=TokenResponse)
 def login(user_data: UserLogin, db: Session = Depends(get_db)):
-    """用户登录"""
+    """User login"""
     user = AuthService.authenticate_user(db, user_data)
     
     if not user:
@@ -95,7 +95,7 @@ def login(user_data: UserLogin, db: Session = Depends(get_db)):
             headers={"WWW-Authenticate": "Bearer"},
         )
     
-    # 生成访问令牌
+    # Generate access token
     access_token, expires_in = create_access_token(data={"sub": user.user_id})
     
     return TokenResponse(
@@ -242,7 +242,7 @@ def remove_deactivated_api_key(
 
 @gui_router.get("/me", response_model=UserResponse)
 def get_current_user(current_user: m.User = Depends(current_user_from_jwt)):
-    """获取当前登录用户的信息 (GUI version)"""
+    """Get current logged-in user information (GUI version)"""
     return UserResponse.from_orm(current_user)
 
 
@@ -252,14 +252,14 @@ def get_current_user(current_user: m.User = Depends(current_user_from_jwt)):
 
 @common_router.get("/oauth/providers", response_model=List[OAuthProviderResponse])
 def get_oauth_providers(db: Session = Depends(get_db)):
-    """获取可用的OAuth提供商列表"""
+    """Get list of available OAuth providers"""
     providers = db.query(m.OAuthProvider).filter(m.OAuthProvider.is_active == True).all()
     return [OAuthProviderResponse.from_orm(provider) for provider in providers]
 
 
 @common_router.post("/oauth/auth", response_model=OAuthAuthResponse)
 def initiate_oauth_auth(request: OAuthAuthRequest, db: Session = Depends(get_db)):
-    """发起OAuth认证"""
+    """Initiate OAuth authentication"""
     try:
         auth_url, state = OAuthService.generate_auth_url(
             db=db,
@@ -274,13 +274,13 @@ def initiate_oauth_auth(request: OAuthAuthRequest, db: Session = Depends(get_db)
         )
 
 
-# 用于存储已处理的授权码，防止重复使用
+# Used to store processed authorization codes to prevent reuse
 _processed_codes = set()
 
 @common_router.post("/oauth/callback", response_model=TokenResponse)
 async def oauth_callback(request: OAuthCallbackRequest, db: Session = Depends(get_db)):
-    """处理OAuth回调"""
-    # 防止授权码重复使用
+    """Handle OAuth callback"""
+    # Prevent authorization code reuse
     if request.code in _processed_codes:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -288,7 +288,7 @@ async def oauth_callback(request: OAuthCallbackRequest, db: Session = Depends(ge
         )
     
     try:
-        # 交换访问令牌 - 使用默认redirect_uri，因为OAuthCallbackRequest中没有这个字段
+        # Exchange access token - use default redirect_uri since OAuthCallbackRequest doesn't have this field
         token_data = await OAuthService.exchange_code_for_token(
             db=db,
             provider_name=request.provider,
@@ -296,18 +296,18 @@ async def oauth_callback(request: OAuthCallbackRequest, db: Session = Depends(ge
             redirect_uri="http://localhost:3000/auth/callback"
         )
         
-        # 获取用户信息
+        # Get user information
         oauth_user_info = await OAuthService.get_user_info(
             db=db,
             provider_name=request.provider,
             access_token=token_data["access_token"]
         )
         
-        # 查找现有用户
+        # Find existing user
         user = OAuthService.find_user_by_oauth(db, request.provider, oauth_user_info.oauth_user_id)
         
         if user:
-            # 更新OAuth账户信息
+            # Update OAuth account information
             OAuthService.create_or_update_oauth_account(
                 db=db,
                 user_id=user.id,
@@ -316,16 +316,16 @@ async def oauth_callback(request: OAuthCallbackRequest, db: Session = Depends(ge
                 token_data=token_data
             )
         else:
-            # 创建新用户
+            # Create new user
             user = AuthService.create_user(
                 db=db,
                 user_create=UserCreate(
                     email=oauth_user_info.email,
-                    password="oauth_user_no_password"  # OAuth用户不需要密码
+                    password="oauth_user_no_password"  # OAuth users don't need password
                 )
             )
             
-            # 创建OAuth账户关联
+            # Create OAuth account association
             OAuthService.create_or_update_oauth_account(
                 db=db,
                 user_id=user.id,
@@ -334,10 +334,10 @@ async def oauth_callback(request: OAuthCallbackRequest, db: Session = Depends(ge
                 token_data=token_data
             )
         
-        # 标记授权码为已使用
+        # Mark authorization code as used
         _processed_codes.add(request.code)
         
-        # 生成JWT令牌
+        # Generate JWT token
         access_token, expires_in = create_access_token(data={"sub": user.user_id})
         
         return TokenResponse(
@@ -361,7 +361,7 @@ async def oauth_callback(request: OAuthCallbackRequest, db: Session = Depends(ge
 
 @gui_router.get("/oauth/accounts", response_model=List[UserOAuthAccountResponse])
 def get_user_oauth_accounts(current_user: m.User = Depends(current_user_from_jwt), db: Session = Depends(get_db)):
-    """获取当前用户的OAuth账户列表"""
+    """Get current user's OAuth account list"""
     oauth_accounts = OAuthService.get_user_oauth_accounts(db, current_user.id)
     
     result = []
@@ -383,7 +383,7 @@ def get_user_oauth_accounts(current_user: m.User = Depends(current_user_from_jwt
 
 @gui_router.delete("/oauth/accounts/{account_id}")
 def remove_oauth_account(account_id: int, current_user: m.User = Depends(current_user_from_jwt), db: Session = Depends(get_db)):
-    """移除OAuth账户关联"""
+    """Remove OAuth account association"""
     oauth_account = db.query(m.UserOAuthAccount).filter(
         m.UserOAuthAccount.id == account_id,
         m.UserOAuthAccount.user_id_fk == current_user.id
@@ -392,17 +392,17 @@ def remove_oauth_account(account_id: int, current_user: m.User = Depends(current
     if not oauth_account:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="OAuth账户不存在"
+            detail="OAuth account does not exist"
         )
     
-    # 检查是否为主要登录方式且用户没有密码
+    # Check if it's the primary login method and user has no password
     if oauth_account.is_primary and not current_user.password_hash:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="无法移除主要登录方式，请先设置密码或添加其他登录方式"
+            detail="Cannot remove primary login method, please set a password or add other login methods first"
         )
     
     db.delete(oauth_account)
     db.commit()
     
-    return {"message": "OAuth账户已移除"}
+    return {"message": "OAuth account has been removed"}

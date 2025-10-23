@@ -45,21 +45,21 @@ Parameters
         raise ValueError("Username is required")
     
     try:
-        # 使用PyGithub库连接GitHub
+        # Use PyGithub library to connect to GitHub
         if github_token:
             g = Github(github_token)
         else:
-            # 如果没有token，使用公开API（有限制）
+            # If no token, use public API (with limitations)
             g = Github()
 
-# 获取用户对象
+        # Get user object
         user = g.get_user(username)
 
-        # 获取用户的仓库列表
+        # Get user's repository list
         repos = user.get_repos(sort="updated", direction="desc")
 
         repositories = []
-        # 限制返回30个仓库
+        # Limit to 30 repositories
         for i, repo in enumerate(repos):
             if i >= 30:
                 break
@@ -119,18 +119,18 @@ async def create_issue_handler(arguments: Dict[str, Any], context: Dict[str, Any
     if not github_token:
         raise ValueError("GitHub token is required")
     
-    # 解析仓库名称（格式：owner/repo）
+    # Parse repository name (format: owner/repo)
     if "/" not in repository:
         raise ValueError("Repository must be in format 'owner/repo'")
     
     try:
-        # 使用PyGithub库连接GitHub
+        # Use PyGithub library to connect to GitHub
         g = Github(github_token)
         
-        # 获取仓库对象
+        # Get repository object
         repo = g.get_repo(repository)
         
-        # 创建issue
+        # Create issue
         issue = repo.create_issue(
             title=title,
             body=body

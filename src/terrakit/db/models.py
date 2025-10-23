@@ -43,7 +43,7 @@ Base = declarative_base()
 class User(Base):
     __tablename__ = "users"
     id = Column(get_uuid_type(), primary_key=True, default=uuid_default())
-    user_id = Column(String(64), unique=True, nullable=False)       # 与 API 的 user_id 对齐
+    user_id = Column(String(64), unique=True, nullable=False)       # Align with API user_id
     email = Column(String(255), unique=True)
     password_hash = Column(String(255))
     is_active = Column(Boolean, default=True)
@@ -89,7 +89,7 @@ class ToolExecution(Base):
 # Plan and UserPlan models removed as they were not used in the application
 
 class OAuthProvider(Base):
-    """OAuth提供商配置表"""
+    """OAuth provider configuration table"""
     __tablename__ = "oauth_providers"
     id = Column(Integer, primary_key=True)
     name = Column(String(32), unique=True, nullable=False)  # google, github
@@ -99,24 +99,24 @@ class OAuthProvider(Base):
     auth_url = Column(String(512), nullable=False)
     token_url = Column(String(512), nullable=False)
     user_info_url = Column(String(512), nullable=False)
-    scopes = Column(String(512))  # 默认请求的权限范围
+    scopes = Column(String(512))  # Default requested permission scopes
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime, default=datetime.utcnow)
 
 class UserOAuthAccount(Base):
-    """用户OAuth账户关联表"""
+    """User OAuth account association table"""
     __tablename__ = "user_oauth_accounts"
     id = Column(Integer, primary_key=True)
     user_id_fk = Column(get_uuid_type(), ForeignKey("users.id"), nullable=False)
     provider_id_fk = Column(Integer, ForeignKey("oauth_providers.id"), nullable=False)
-    oauth_user_id = Column(String(255), nullable=False)  # OAuth提供商的用户ID
-    email = Column(String(255))  # OAuth账户的邮箱
-    display_name = Column(String(128))  # OAuth账户的显示名称
-    avatar_url = Column(String(512))  # 头像URL
-    access_token = Column(Text)  # 加密存储的访问令牌
-    refresh_token = Column(Text)  # 加密存储的刷新令牌
-    token_expires_at = Column(DateTime)  # 令牌过期时间
-    is_primary = Column(Boolean, default=False)  # 是否为主要登录方式
+    oauth_user_id = Column(String(255), nullable=False)  # OAuth provider's user ID
+    email = Column(String(255))  # OAuth account email
+    display_name = Column(String(128))  # OAuth account display name
+    avatar_url = Column(String(512))  # Avatar URL
+    access_token = Column(Text)  # Encrypted stored access token
+    refresh_token = Column(Text)  # Encrypted stored refresh token
+    token_expires_at = Column(DateTime)  # Token expiration time
+    is_primary = Column(Boolean, default=False)  # Whether this is the primary login method
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow)
     

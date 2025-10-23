@@ -17,14 +17,14 @@ def current_user_from_api_key(
     x_api_key: str = Header(..., alias="X-API-Key"),
     db: Session = Depends(get_db)
 ) -> models.User:
-    """从API Key获取当前用户（用于SDK）"""
+    """Get current user from API Key (for SDK)"""
     return AuthService.get_current_user_from_api_key(db, x_api_key)
 
 def current_user_from_jwt(
     credentials: Optional[HTTPAuthorizationCredentials] = Depends(security),
     db: Session = Depends(get_db)
 ) -> models.User:
-    """从JWT令牌获取当前用户（用于GUI）"""
+    """Get current user from JWT token (for GUI)"""
     if not credentials:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -37,5 +37,5 @@ def verify_api_key(
     x_api_key: str = Header(..., alias="X-API-Key"),
     db: Session = Depends(get_db)
 ) -> models.User:
-    """验证API密钥并返回用户（兼容现有代码）"""
+    """Verify API key and return user (compatible with existing code)"""
     return current_user_from_api_key(x_api_key, db)

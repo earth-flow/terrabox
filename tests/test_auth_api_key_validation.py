@@ -12,7 +12,7 @@ def client():
 
 
 def test_invalid_api_key_format_rejected(client):
-    """使用格式错误的API Key请求应返回401。"""
+    """Requests with malformed API Key should return 401."""
     headers = {"X-API-Key": "invalid"}
     r = client.get("/v1/sdk/tools", headers=headers)
     assert r.status_code == 401, r.text
@@ -21,7 +21,7 @@ def test_invalid_api_key_format_rejected(client):
 
 
 def test_unknown_but_well_formatted_api_key_rejected(client):
-    """使用格式正确但不存在的API Key应返回401。"""
+    """Requests with well-formatted but non-existent API Key should return 401."""
     unknown_key = "tlk_live_" + ("A" * 32)
     headers = {"X-API-Key": unknown_key}
     r = client.get("/v1/sdk/tools", headers=headers)
@@ -30,7 +30,7 @@ def test_unknown_but_well_formatted_api_key_rejected(client):
 
 
 def test_execute_tool_with_invalid_api_key_rejected(client):
-    """执行工具时使用无效API Key应返回401。"""
+    """Tool execution with invalid API Key should return 401."""
     unknown_key = "tlk_live_" + ("B" * 32)
     headers = {"X-API-Key": unknown_key}
     body = {"inputs": {"a": 1, "b": 2}, "metadata": {"user_id": "tester"}}

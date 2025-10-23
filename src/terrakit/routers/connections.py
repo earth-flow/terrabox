@@ -697,7 +697,7 @@ def get_toolkit_connection_stats(
 __all__ = ["sdk_router", "gui_router", "common_router"]
 
 
-# 小型去重：统一工具包有效性校验
+# Small deduplication: Unified toolkit validity validation
 
 def _get_active_toolkit_or_404(db: Session, toolkit_key: str) -> m.Toolkit:
     toolkit = db.query(m.Toolkit).filter(m.Toolkit.key == toolkit_key, m.Toolkit.is_active == True).first()

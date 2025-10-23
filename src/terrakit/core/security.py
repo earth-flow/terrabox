@@ -216,50 +216,50 @@ class DataMasking:
     
     @staticmethod
     def encrypt_token_simple(token: str, secret_key: str) -> str:
-        """简单的令牌加密（用于OAuth状态等临时数据）
+        """Simple token encryption (for OAuth state and other temporary data)
         
         Args:
-            token: 要加密的令牌
-            secret_key: 加密密钥
+            token: Token to encrypt
+            secret_key: Encryption key
             
         Returns:
-            加密后的令牌
+            Encrypted token
         """
         if not token:
             return ""
         
-        # 简单的XOR加密
-        key = secret_key.encode()[:32]  # 取前32字节作为密钥
+        # Simple XOR encryption
+        key = secret_key.encode()[:32]  # Take first 32 bytes as key
         encrypted_bytes = bytearray()
         token_bytes = token.encode('utf-8')
         
         for i, byte in enumerate(token_bytes):
             encrypted_bytes.append(byte ^ key[i % len(key)])
         
-        # Base64编码
+        # Base64 encoding
         return base64.b64encode(encrypted_bytes).decode('utf-8')
     
     @staticmethod
     def decrypt_token_simple(encrypted_token: str, secret_key: str) -> str:
-        """简单的令牌解密
+        """Simple token decryption
         
         Args:
-            encrypted_token: 加密的令牌
-            secret_key: 解密密钥
+            encrypted_token: Encrypted token
+            secret_key: Decryption key
             
         Returns:
-            解密后的令牌
+            Decrypted token
         """
         if not encrypted_token:
             return ""
         
         try:
-            key = secret_key.encode()[:32]  # 取前32字节作为密钥
+            key = secret_key.encode()[:32]  # Take first 32 bytes as key
             
-            # Base64解码
+            # Base64 decoding
             encrypted_bytes = base64.b64decode(encrypted_token.encode('utf-8'))
             
-            # XOR解密
+            # XOR decryption
             decrypted_bytes = bytearray()
             for i, byte in enumerate(encrypted_bytes):
                 decrypted_bytes.append(byte ^ key[i % len(key)])

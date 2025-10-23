@@ -8,7 +8,7 @@ from typing import Callable, Dict, List, Optional
 from threading import RLock 
 from .core.tool_registry import ToolSpec, Toolkit  # Pydantic API schemas 
 
-# handler 形状：handler(arguments: dict, context: dict, connected_account_or_none) -> dict 
+# handler shape: handler(arguments: dict, context: dict, connected_account_or_none) -> dict 
 ExecuteHandler = Callable[[dict, dict, object | None], dict] 
 
 _LOCK = RLock() 
@@ -45,7 +45,7 @@ def list_tools(toolkit: Optional[str] = None) -> List[ToolSpec]:
         # Filter by toolkit name using slug prefix (e.g., "github.list_user_repos" belongs to "github" toolkit)
         return [s for s in specs if s.slug.startswith(f"{toolkit}.")] 
 
-# 测试用：清空注册表 
+# For testing: clear registry 
 def _reset_registry_for_tests() -> None:     # pragma: no cover 
     with _LOCK: 
         _TOOLKITS.clear() 
