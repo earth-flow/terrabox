@@ -27,6 +27,7 @@ from ..core.utils.auth import (
 from ..core.security import DataMasking
 from ..core.services import AuthService
 from ..core.oauth_service import OAuthService
+from ..core.utils.config import settings
 from .deps import current_user_from_api_key, current_user_from_jwt
 from ..core.utils.rate_limit import auth_rate_limiter
 
@@ -251,18 +252,17 @@ def get_current_user(current_user: m.User = Depends(current_user_from_jwt)):
 # =============================================================================
 
 @common_router.get("/oauth/providers", response_model=List[OAuthProviderResponse])
-def get_oauth_providers(db: Session = Depends(get_db)):
+def get_oauth_providers():
     """Get list of available OAuth providers"""
-    providers = db.query(m.OAuthProvider).filter(m.OAuthProvider.is_active == True).all()
-    return [OAuthProviderResponse.from_orm(provider) for provider in providers]
+    providers = OAuthService.get_available_providers()
+    return [OAuthProviderResponse(**provider) for provider in providers]
 
 
 @common_router.post("/oauth/auth", response_model=OAuthAuthResponse)
-def initiate_oauth_auth(request: OAuthAuthRequest, db: Session = Depends(get_db)):
+def initiate_oauth_auth(request: OAuthAuthRequest):
     """Initiate OAuth authentication"""
     try:
         auth_url, state = OAuthService.generate_auth_url(
-            db=db,
             provider_name=request.provider,
             redirect_uri=request.redirect_uri
         )
@@ -288,17 +288,16 @@ async def oauth_callback(request: OAuthCallbackRequest, db: Session = Depends(ge
         )
     
     try:
-        # Exchange access token - use default redirect_uri since OAuthCallbackRequest doesn't have this field
+        # Exchange access token - use provided redirect_uri or default from environment
+        redirect_uri = request.redirect_uri or settings.OAUTH_REDIRECT_URI
         token_data = await OAuthService.exchange_code_for_token(
-            db=db,
             provider_name=request.provider,
             code=request.code,
-            redirect_uri="http://localhost:3000/auth/callback"
+            redirect_uri=redirect_uri
         )
         
         # Get user information
         oauth_user_info = await OAuthService.get_user_info(
-            db=db,
             provider_name=request.provider,
             access_token=token_data["access_token"]
         )
@@ -352,10 +351,16 @@ async def oauth_callback(request: OAuthCallbackRequest, db: Session = Depends(ge
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=str(e)
         )
+    except HTTPException:
+        # Re-raise HTTPExceptions from OAuth service
+        raise
     except Exception as e:
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.error(f"OAuth callback error for provider {request.provider}: {str(e)}", exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="OAuth authentication failed"
+            detail=f"OAuth authentication failed: {str(e)}"
         )
 
 

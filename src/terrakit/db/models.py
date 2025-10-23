@@ -108,7 +108,7 @@ class UserOAuthAccount(Base):
     __tablename__ = "user_oauth_accounts"
     id = Column(Integer, primary_key=True)
     user_id_fk = Column(get_uuid_type(), ForeignKey("users.id"), nullable=False)
-    provider_id_fk = Column(Integer, ForeignKey("oauth_providers.id"), nullable=False)
+    provider_name = Column(String(32), nullable=False)  # OAuth provider name (google, github, etc.)
     oauth_user_id = Column(String(255), nullable=False)  # OAuth provider's user ID
     email = Column(String(255))  # OAuth account email
     display_name = Column(String(128))  # OAuth account display name
@@ -121,11 +121,10 @@ class UserOAuthAccount(Base):
     updated_at = Column(DateTime, default=datetime.utcnow)
     
     user = relationship("User")
-    provider = relationship("OAuthProvider")
     
     __table_args__ = (
-        UniqueConstraint("provider_id_fk", "oauth_user_id", name="uq_oauth_provider_user"),
-        Index("ix_oauth_user_provider", "user_id_fk", "provider_id_fk"),
+        UniqueConstraint("provider_name", "oauth_user_id", name="uq_oauth_provider_user"),
+        Index("ix_oauth_user_provider", "user_id_fk", "provider_name"),
     )
 
 

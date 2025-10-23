@@ -11,7 +11,7 @@ import secrets
 import hashlib
 import base64
 from datetime import datetime, timedelta
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, List
 from urllib.parse import urlencode, parse_qs
 
 import httpx
@@ -45,78 +45,147 @@ class OAuthService:
         except Exception:
             return ""
     
-    # OAuth provider configuration
-    PROVIDERS = {
-        "google": {
-            "auth_url": "https://accounts.google.com/o/oauth2/v2/auth",
-            "token_url": "https://oauth2.googleapis.com/token",
-            "user_info_url": "https://www.googleapis.com/oauth2/v2/userinfo",
-            "scopes": "openid email profile"
-        },
-        "github": {
-            "auth_url": "https://github.com/login/oauth/authorize",
-            "token_url": "https://github.com/login/oauth/access_token",
-            "user_info_url": "https://api.github.com/user",
-            "scopes": "user:email"
+    # OAuth provider configuration from environment variables
+    @classmethod
+    def get_provider_config(cls, provider_name: str) -> Optional[Dict[str, Any]]:
+        """Get OAuth provider configuration from environment variables"""
+        provider_configs = {
+            "google": {
+                "client_id": settings.GOOGLE_OAUTH_CLIENT_ID,
+                "client_secret": settings.GOOGLE_OAUTH_CLIENT_SECRET,
+                "auth_url": "https://accounts.google.com/o/oauth2/v2/auth",
+                "token_url": "https://oauth2.googleapis.com/token",
+                "user_info_url": "https://www.googleapis.com/oauth2/v2/userinfo",
+                "scopes": "openid email profile",
+                "display_name": "Google"
+            },
+            "github": {
+                "client_id": settings.GITHUB_OAUTH_CLIENT_ID,
+                "client_secret": settings.GITHUB_OAUTH_CLIENT_SECRET,
+                "auth_url": "https://github.com/login/oauth/authorize",
+                "token_url": "https://github.com/login/oauth/access_token",
+                "user_info_url": "https://api.github.com/user",
+                "scopes": "user:email",
+                "display_name": "GitHub"
+            },
+            "microsoft": {
+                "client_id": settings.MICROSOFT_OAUTH_CLIENT_ID,
+                "client_secret": settings.MICROSOFT_OAUTH_CLIENT_SECRET,
+                "auth_url": "https://login.microsoftonline.com/common/oauth2/v2.0/authorize",
+                "token_url": "https://login.microsoftonline.com/common/oauth2/v2.0/token",
+                "user_info_url": "https://graph.microsoft.com/v1.0/me",
+                "scopes": "openid email profile",
+                "display_name": "Microsoft"
+            },
+            "discord": {
+                "client_id": settings.DISCORD_OAUTH_CLIENT_ID,
+                "client_secret": settings.DISCORD_OAUTH_CLIENT_SECRET,
+                "auth_url": "https://discord.com/api/oauth2/authorize",
+                "token_url": "https://discord.com/api/oauth2/token",
+                "user_info_url": "https://discord.com/api/users/@me",
+                "scopes": "identify email",
+                "display_name": "Discord"
+            },
+            "linkedin": {
+                "client_id": settings.LINKEDIN_OAUTH_CLIENT_ID,
+                "client_secret": settings.LINKEDIN_OAUTH_CLIENT_SECRET,
+                "auth_url": "https://www.linkedin.com/oauth/v2/authorization",
+                "token_url": "https://www.linkedin.com/oauth/v2/accessToken",
+                "user_info_url": "https://api.linkedin.com/v2/people/~",
+                "scopes": "r_liteprofile r_emailaddress",
+                "display_name": "LinkedIn"
+            }
         }
-    }
+        
+        config = provider_configs.get(provider_name)
+        if not config:
+            return None
+            
+        # Check if required credentials are configured
+        if not config["client_id"] or not config["client_secret"]:
+            return None
+            
+        return config
     
     @classmethod
-    def get_provider(cls, db: Session, provider_name: str) -> Optional[m.OAuthProvider]:
-        """Get OAuth provider configuration"""
-        return db.query(m.OAuthProvider).filter(
-            m.OAuthProvider.name == provider_name,
-            m.OAuthProvider.is_active == True
-        ).first()
+    def get_available_providers(cls) -> List[Dict[str, str]]:
+        """Get list of available OAuth providers with valid configuration"""
+        providers = []
+        provider_display_names = {
+            "google": "Google",
+            "github": "GitHub", 
+            "microsoft": "Microsoft",
+            "discord": "Discord",
+            "linkedin": "LinkedIn"
+        }
+        
+        for provider_name in ["google", "github", "microsoft", "discord", "linkedin"]:
+            config = cls.get_provider_config(provider_name)
+            if config:
+                providers.append({
+                    "name": provider_name,
+                    "display_name": provider_display_names.get(provider_name, provider_name.title()),
+                    "auth_url": config["auth_url"],
+                    "scopes": config["scopes"],
+                    "is_active": True
+                })
+        return providers
     
     @classmethod
-    def generate_auth_url(cls, db: Session, provider_name: str, redirect_uri: str) -> tuple[str, str]:
+    def generate_auth_url(cls, provider_name: str, redirect_uri: str = None) -> tuple[str, str]:
         """Generate OAuth authentication URL
+        
+        Args:
+            provider_name: OAuth provider name
+            redirect_uri: Redirect URI (optional, uses environment variable if not provided)
         
         Returns:
             tuple: (auth_url, state) - Authentication URL and state parameter
         """
-        provider = cls.get_provider(db, provider_name)
-        if not provider:
+        provider_config = cls.get_provider_config(provider_name)
+        if not provider_config:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Unsupported OAuth provider: {provider_name}"
+                detail=f"OAuth provider '{provider_name}' is not configured. Please check that {provider_name.upper()}_OAUTH_CLIENT_ID and {provider_name.upper()}_OAUTH_CLIENT_SECRET environment variables are set."
             )
+        
+        # Use provided redirect_uri or default from environment
+        if not redirect_uri:
+            redirect_uri = settings.OAUTH_REDIRECT_URI
         
         # Generate random state parameter to prevent CSRF attacks
         state = secrets.token_urlsafe(32)
         
         # Build authentication URL parameters
         params = {
-            "client_id": provider.client_id,
+            "client_id": provider_config["client_id"],
             "redirect_uri": redirect_uri,
-            "scope": provider.scopes,
+            "scope": provider_config["scopes"],
             "response_type": "code",
             "state": state
         }
         
-        auth_url = f"{provider.auth_url}?{urlencode(params)}"
+        auth_url = f"{provider_config['auth_url']}?{urlencode(params)}"
         return auth_url, state
     
     @classmethod
-    async def exchange_code_for_token(cls, db: Session, provider_name: str, 
-                                    code: str, redirect_uri: str) -> Dict[str, Any]:
+    async def exchange_code_for_token(cls, provider_name: str, code: str, redirect_uri: str) -> Dict[str, Any]:
         """Use authorization code to exchange for access token"""
         import logging
         logger = logging.getLogger(__name__)
         
-        provider = cls.get_provider(db, provider_name)
-        if not provider:
-            logger.error(f"Unsupported OAuth provider: {provider_name}")
+        provider_config = cls.get_provider_config(provider_name)
+        if not provider_config:
+            logger.error(f"OAuth provider {provider_name} is not configured or missing credentials")
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Unsupported OAuth provider: {provider_name}"
+                detail=f"OAuth provider '{provider_name}' is not configured. Please check that {provider_name.upper()}_OAUTH_CLIENT_ID and {provider_name.upper()}_OAUTH_CLIENT_SECRET environment variables are set."
             )
         
         # Prepare token exchange request
         token_data = {
-            "client_id": provider.client_id,
-            "client_secret": provider.client_secret,
+            "client_id": provider_config["client_id"],
+            "client_secret": provider_config["client_secret"],
             "code": code,
             "redirect_uri": redirect_uri,
             "grant_type": "authorization_code"
@@ -127,12 +196,12 @@ class OAuthService:
             "Content-Type": "application/x-www-form-urlencoded"
         }
         
-        logger.info(f"Sending token exchange request to {provider_name}: {provider.token_url}")
+        logger.info(f"Sending token exchange request to {provider_name}: {provider_config['token_url']}")
         
         async with httpx.AsyncClient() as client:
             try:
                 response = await client.post(
-                    provider.token_url,
+                    provider_config["token_url"],
                     data=token_data,
                     headers=headers
                 )
@@ -167,13 +236,13 @@ class OAuthService:
                 )
     
     @classmethod
-    async def get_user_info(cls, db: Session, provider_name: str, access_token: str) -> OAuthUserInfo:
+    async def get_user_info(cls, provider_name: str, access_token: str) -> OAuthUserInfo:
         """Get OAuth user information"""
-        provider = cls.get_provider(db, provider_name)
-        if not provider:
+        provider_config = cls.get_provider_config(provider_name)
+        if not provider_config:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Unsupported OAuth provider: {provider_name}"
+                detail=f"Unsupported or unconfigured OAuth provider: {provider_name}"
             )
         
         headers = {
@@ -183,7 +252,7 @@ class OAuthService:
         
         async with httpx.AsyncClient() as client:
             response = await client.get(
-                provider.user_info_url,
+                provider_config["user_info_url"],
                 headers=headers
             )
             
@@ -223,6 +292,41 @@ class OAuthService:
                     display_name=user_data.get("name") or user_data.get("login", ""),
                     avatar_url=user_data.get("avatar_url")
                 )
+            elif provider_name == "microsoft":
+                return OAuthUserInfo(
+                    oauth_user_id=user_data["id"],
+                    email=user_data.get("mail") or user_data.get("userPrincipalName", ""),
+                    display_name=user_data.get("displayName", ""),
+                    avatar_url=None  # Microsoft Graph API requires separate request for photo
+                )
+            elif provider_name == "discord":
+                return OAuthUserInfo(
+                    oauth_user_id=user_data["id"],
+                    email=user_data.get("email", ""),
+                    display_name=user_data.get("username", ""),
+                    avatar_url=f"https://cdn.discordapp.com/avatars/{user_data['id']}/{user_data['avatar']}.png" if user_data.get("avatar") else None
+                )
+            elif provider_name == "linkedin":
+                # LinkedIn v2 API requires separate requests for email
+                email = ""
+                try:
+                    email_response = await client.get(
+                        "https://api.linkedin.com/v2/emailAddress?q=members&projection=(elements*(handle~))",
+                        headers=headers
+                    )
+                    if email_response.status_code == 200:
+                        email_data = email_response.json()
+                        if email_data.get("elements"):
+                            email = email_data["elements"][0]["handle~"]["emailAddress"]
+                except:
+                    pass
+                
+                return OAuthUserInfo(
+                    oauth_user_id=user_data["id"],
+                    email=email,
+                    display_name=f"{user_data.get('firstName', {}).get('localized', {}).get('en_US', '')} {user_data.get('lastName', {}).get('localized', {}).get('en_US', '')}".strip(),
+                    avatar_url=user_data.get("profilePicture", {}).get("displayImage~", {}).get("elements", [{}])[0].get("identifiers", [{}])[0].get("identifier")
+                )
             else:
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
@@ -233,16 +337,16 @@ class OAuthService:
     def create_or_update_oauth_account(cls, db: Session, user_id: int, provider_name: str,
                                      oauth_user_info: OAuthUserInfo, token_data: Dict[str, Any]) -> m.UserOAuthAccount:
         """Create or update OAuth account association"""
-        provider = cls.get_provider(db, provider_name)
-        if not provider:
+        provider_config = cls.get_provider_config(provider_name)
+        if not provider_config:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Unsupported OAuth provider: {provider_name}"
+                detail=f"Unsupported OAuth provider: {provider_name}. Please check {provider_name.upper()}_CLIENT_ID and {provider_name.upper()}_CLIENT_SECRET environment variables."
             )
         
         # Look for existing OAuth account
         oauth_account = db.query(m.UserOAuthAccount).filter(
-            m.UserOAuthAccount.provider_id_fk == provider.id,
+            m.UserOAuthAccount.provider_name == provider_name,
             m.UserOAuthAccount.oauth_user_id == oauth_user_info.oauth_user_id
         ).first()
         
@@ -265,7 +369,7 @@ class OAuthService:
             # Create new OAuth account
             oauth_account = m.UserOAuthAccount(
                 user_id_fk=user_id,
-                provider_id_fk=provider.id,
+                provider_name=provider_name,
                 oauth_user_id=oauth_user_info.oauth_user_id,
                 email=oauth_user_info.email,
                 display_name=oauth_user_info.display_name,
@@ -284,12 +388,12 @@ class OAuthService:
     @classmethod
     def find_user_by_oauth(cls, db: Session, provider_name: str, oauth_user_id: str) -> Optional[m.User]:
         """Find user by OAuth information"""
-        provider = cls.get_provider(db, provider_name)
-        if not provider:
+        provider_config = cls.get_provider_config(provider_name)
+        if not provider_config:
             return None
         
         oauth_account = db.query(m.UserOAuthAccount).filter(
-            m.UserOAuthAccount.provider_id_fk == provider.id,
+            m.UserOAuthAccount.provider_name == provider_name,
             m.UserOAuthAccount.oauth_user_id == oauth_user_id
         ).first()
         

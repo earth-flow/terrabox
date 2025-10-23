@@ -80,12 +80,11 @@ class ApiKeyResponse(BaseModel):
 
 class OAuthProviderResponse(BaseModel):
     """OAuth provider response model"""
-    id: int
     name: str
     display_name: str
     auth_url: str
     scopes: Optional[str] = None
-    is_active: bool
+    is_active: bool = True
 
     class Config:
         from_attributes = True
@@ -120,6 +119,7 @@ class OAuthCallbackRequest(BaseModel):
     provider: str
     code: str
     state: Optional[str] = None
+    redirect_uri: Optional[str] = None
 
 
 class UserOAuthAccountResponse(BaseModel):
