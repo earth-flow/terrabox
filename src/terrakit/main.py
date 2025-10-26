@@ -15,6 +15,7 @@ from .routers import tools as tools_router
 from .routers import connections as connections_router
 from .routers import analytics as analytics_router
 from .core.background_tasks import start_background_tasks, stop_background_tasks
+from .core.services.async_tool_server import batch_tools_router
 
 def init_db():
     """Initialize database tables.
@@ -79,6 +80,9 @@ def create_app() -> FastAPI:
     # Analytics routers
     app.include_router(analytics_router.sdk_router)       # SDK analytics
     app.include_router(analytics_router.gui_router)       # GUI analytics
+    
+    # Batch tools router (new async batch processing)
+    app.include_router(batch_tools_router)                # Batch tools execution
     
     return app
 

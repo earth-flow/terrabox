@@ -1,5 +1,5 @@
 [project]
-name = "terralink-platform"
+name = "terrakit"
 version = "0.1.0"
 description = "Platform backend for the Terralink SDK"
 authors = [

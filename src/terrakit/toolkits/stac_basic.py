@@ -274,9 +274,12 @@ def stac_stack_handler(arguments: dict, context: dict, account=None) -> Dict[str
         resolution=resolution,
         bounds=bounds_geom,
         epsg=crs.split(":")[1] if crs and crs.startswith("EPSG:") else None,
-        chunks=chunks,
         resampling=resampling
     )
+    
+    # Apply chunking after stack creation
+    if chunks:
+        da = da.chunk(chunks)
 
     if dtype:
         da = da.astype(dtype)
