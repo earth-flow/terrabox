@@ -90,7 +90,7 @@ def _norm_aoi_geojson(geojson_like: Union[str, Dict[str, Any], None]) -> Optiona
 def _items_to_minimal(items, asset_keys: Optional[List[str]] = None, max_assets_per_item: int = 50):
     """
     Convert pystac.ItemCollection (or list of Items/dicts) into a minimal, JSON-safe structure.
-    Keeps: id, collection, datetime, and selected assets {key: {href, type}}.
+    Keeps: id, collection, datetime, properties, geometry, bbox, and selected assets {key: {href, type}}.
     """
     out = []
     for it in items:
@@ -103,9 +103,23 @@ def _items_to_minimal(items, asset_keys: Optional[List[str]] = None, max_assets_
         else:
             props = it.get("properties", {}) if isinstance(it, dict) else {}
             it_dt = props.get("datetime")
+        
+        # Get properties, geometry, and bbox for stackstac compatibility
+        properties = getattr(it, "properties", None) or (it.get("properties") if isinstance(it, dict) else {})
+        geometry = getattr(it, "geometry", None) or (it.get("geometry") if isinstance(it, dict) else None)
+        bbox = getattr(it, "bbox", None) or (it.get("bbox") if isinstance(it, dict) else None)
+        
         assets = getattr(it, "assets", None) or (it.get("assets") if isinstance(it, dict) else {}) or {}
 
-        rec = {"id": it_id, "collection": it_coll, "datetime": it_dt, "assets": {}}
+        rec = {
+            "id": it_id, 
+            "collection": it_coll, 
+            "datetime": it_dt, 
+            "properties": properties,
+            "geometry": geometry,
+            "bbox": bbox,
+            "assets": {}
+        }
         cnt = 0
         for k, a in assets.items():
             if asset_keys and k not in asset_keys:
@@ -266,6 +280,21 @@ def stac_stack_handler(arguments: dict, context: dict, account=None) -> Dict[str
         bounds_geom = gj.get("geometry", gj)
     elif bounds:
         bounds_geom = bounds
+    else:
+        # Auto-calculate bounds from items if not provided
+        all_bboxes = []
+        for item in items:
+            if isinstance(item, dict) and item.get("bbox"):
+                all_bboxes.append(item["bbox"])
+            elif hasattr(item, "bbox") and item.bbox:
+                all_bboxes.append(item.bbox)
+        
+        if all_bboxes:
+            min_x = min(bbox[0] for bbox in all_bboxes)
+            min_y = min(bbox[1] for bbox in all_bboxes)
+            max_x = max(bbox[2] for bbox in all_bboxes)
+            max_y = max(bbox[3] for bbox in all_bboxes)
+            bounds_geom = [min_x, min_y, max_x, max_y]
 
     # Build lazy DataArray
     da = stack(
@@ -273,7 +302,7 @@ def stac_stack_handler(arguments: dict, context: dict, account=None) -> Dict[str
         assets=assets,
         resolution=resolution,
         bounds=bounds_geom,
-        epsg=crs.split(":")[1] if crs and crs.startswith("EPSG:") else None,
+        epsg=crs.split(":")[1] if crs and crs.startswith("EPSG:") else 4326,
         resampling=resampling
     )
     
