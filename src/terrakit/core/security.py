@@ -6,7 +6,7 @@ import base64
 import secrets
 import hmac
 import hashlib
-from typing import Dict, Any, Optional, Union
+from typing import Dict, Any, Optional
 from cryptography.fernet import Fernet
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
@@ -16,7 +16,7 @@ import logging
 logger = logging.getLogger(__name__)
 
 class CredentialEncryption:
-    """Secure credential encryption using AES-256-GCM via Fernet."""
+    """Secure credential encryption using AES-256-GCM via Fernet with per-encryption salt."""
     
     def __init__(self, encryption_key: Optional[str] = None):
         """Initialize with encryption key.
@@ -28,56 +28,86 @@ class CredentialEncryption:
             self._key = encryption_key.encode()
         else:
             # Get key from environment or generate a new one
-            key_str = os.getenv('TERRALINK_ENCRYPTION_KEY')
+            key_str = os.getenv('TERRAKIT_ENCRYPTION_KEY')
             if not key_str:
                 # Generate a new key for development (should be set in production)
                 key_str = base64.urlsafe_b64encode(os.urandom(32)).decode()
-                logger.warning("No encryption key found, generated temporary key. Set TERRALINK_ENCRYPTION_KEY in production.")
+                logger.warning("No encryption key found, generated temporary key. Set TERRAKIT_ENCRYPTION_KEY in production.")
             
             self._key = key_str.encode()
+    
+    def _derive_fernet_key(self, salt: bytes) -> Fernet:
+        """Derive Fernet key from base key and salt.
         
-        # Derive Fernet key from the base key
+        Args:
+            salt: Random salt for key derivation
+            
+        Returns:
+            Fernet instance with derived key
+        """
         kdf = PBKDF2HMAC(
             algorithm=hashes.SHA256(),
             length=32,
-            salt=b'terralink_salt',  # In production, use a random salt per encryption
+            salt=salt,
             iterations=100000,
             backend=default_backend()
         )
         fernet_key = base64.urlsafe_b64encode(kdf.derive(self._key))
-        self._fernet = Fernet(fernet_key)
+        return Fernet(fernet_key)
     
     def encrypt_credentials(self, credentials: Dict[str, Any]) -> str:
-        """Encrypt credentials dictionary.
+        """Encrypt credentials dictionary with random salt.
         
         Args:
             credentials: Dictionary containing sensitive credential data
             
         Returns:
-            Base64 encoded encrypted credentials
+            Base64 encoded encrypted credentials with embedded salt
         """
         try:
+            # Generate random salt for this encryption
+            salt = os.urandom(16)
+            
+            # Derive Fernet key with this salt
+            fernet = self._derive_fernet_key(salt)
+            
             # Convert to JSON and encrypt
             json_data = json.dumps(credentials, sort_keys=True)
-            encrypted_data = self._fernet.encrypt(json_data.encode())
-            return base64.urlsafe_b64encode(encrypted_data).decode()
+            encrypted_data = fernet.encrypt(json_data.encode())
+            
+            # Combine salt and encrypted data: salt(16 bytes) + encrypted_data
+            combined_data = salt + encrypted_data
+            
+            return base64.urlsafe_b64encode(combined_data).decode()
         except Exception as e:
             logger.error(f"Failed to encrypt credentials: {e}")
             raise ValueError("Credential encryption failed")
     
     def decrypt_credentials(self, encrypted_credentials: str) -> Dict[str, Any]:
-        """Decrypt credentials.
+        """Decrypt credentials with embedded salt.
         
         Args:
-            encrypted_credentials: Base64 encoded encrypted credentials
+            encrypted_credentials: Base64 encoded encrypted credentials with embedded salt
             
         Returns:
             Decrypted credentials dictionary
         """
         try:
-            # Decode and decrypt
-            encrypted_data = base64.urlsafe_b64decode(encrypted_credentials.encode())
-            decrypted_data = self._fernet.decrypt(encrypted_data)
+            # Decode the combined data
+            combined_data = base64.urlsafe_b64decode(encrypted_credentials.encode())
+            
+            # Extract salt (first 16 bytes) and encrypted data
+            if len(combined_data) < 16:
+                raise ValueError("Invalid encrypted data format")
+            
+            salt = combined_data[:16]
+            encrypted_data = combined_data[16:]
+            
+            # Derive Fernet key with extracted salt
+            fernet = self._derive_fernet_key(salt)
+            
+            # Decrypt and parse JSON
+            decrypted_data = fernet.decrypt(encrypted_data)
             return json.loads(decrypted_data.decode())
         except Exception as e:
             logger.error(f"Failed to decrypt credentials: {e}")
@@ -100,7 +130,7 @@ class DataMasking:
         if not api_key or len(api_key) < 10:
             return "***"
         
-        # Handle terralink format: tlk_prefix_key
+        # Handle terrakit format: tlk_prefix_key
         if api_key.startswith("tlk_"):
             parts = api_key.split("_", 2)
             if len(parts) >= 3:

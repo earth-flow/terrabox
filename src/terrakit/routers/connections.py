@@ -17,525 +17,14 @@ from ..core.schemas import (
 )
 from ..core.services import ConnectionService, ToolOverrideService
 from ..core.tool_registry import get_tool_registry
+from .factory import RouterConfig, SDK_CONFIG, GUI_CONFIG
 
 
 # =============================================================================
 # SDK Router (API Key Authentication)
 # =============================================================================
-
-sdk_router = APIRouter(prefix="/v1/sdk", tags=["connections-sdk"])
-
-
-@sdk_router.get("/toolkits/{toolkit_key}/tools", response_model=List[ToolDefinitionResponse])
-def get_toolkit_tools_sdk(
-    toolkit_key: str,
-    current_user: m.User = Depends(current_user_from_api_key),
-    db: Session = Depends(get_db)
-):
-    """Get tool definitions for an app from ToolRegistry (SDK version)."""
-    # Verify toolkit exists and user has access
-    _get_active_toolkit_or_404(db, toolkit_key)
-    
-    # Get tools from registry
-    registry = get_tool_registry()
-    tool_defs = registry.list_tools(toolkit_key)
-    
-    return [
-        ToolDefinitionResponse(
-            tool_key=tool.tool_key,
-            name=tool.name,
-            description=tool.description,
-            input_schema=tool.input_schema,
-            default_enabled=tool.default_enabled,
-            default_config=tool.default_config,
-            required_scopes=tool.required_scopes,
-            version=tool.version,
-            digest=tool.digest
-        )
-        for tool in tool_defs
-    ]
-
-
-@sdk_router.post("/toolkits/{toolkit_key}/connections", response_model=ConnectionResponse, status_code=status.HTTP_201_CREATED)
-def create_connection_sdk(
-    toolkit_key: str,
-    request: ConnectionCreateRequest,
-    current_user: m.User = Depends(current_user_from_api_key),
-    db: Session = Depends(get_db)
-):
-    """Create a new connection (SDK version)."""
-    # Verify toolkit exists
-    _get_active_toolkit_or_404(db, toolkit_key)
-    
-    # Create connection
-    connection = ConnectionService.create_connection(
-        db=db,
-        user_id=current_user.user_id,
-        app_key=toolkit_key,
-        name=request.name,
-        auth_method=request.auth_method,
-        credentials=request.credentials,
-        scopes=request.scopes,
-        labels=request.labels
-    )
-    
-    return ConnectionResponse.from_orm(connection)
-
-
-@sdk_router.post("/toolkits/{toolkit_key}/connections/oauth2-start", response_model=ConnectionOAuth2StartResponse)
-def start_oauth2_flow_sdk(
-    toolkit_key: str,
-    request: ConnectionOAuth2StartRequest,
-    current_user: m.User = Depends(current_user_from_api_key),
-    db: Session = Depends(get_db)
-):
-    """Start OAuth2 flow for a connection (SDK version)."""
-    try:
-        # First create an OAuth2 connection
-        _get_active_toolkit_or_404(db, toolkit_key)
-        connection = ConnectionService.create_connection(
-            db=db,
-            user_id=current_user.user_id,
-            app_key=toolkit_key,
-            name=request.name,
-            auth_method=m.AuthMethod.oauth2,
-            labels=request.labels,
-            scopes=request.scopes,
-            redirect_uri=request.redirect_uri
-        )
-        
-        # Start OAuth2 flow
-        oauth_data = ConnectionService.start_oauth2_flow(
-            db=db,
-            user_id=current_user.user_id,
-            connection_id=connection.id,
-            redirect_uri=request.redirect_uri,
-            scopes=request.scopes
-        )
-        
-        return ConnectionOAuth2StartResponse(
-            connection_id=connection.id,
-            auth_url=oauth_data['auth_url'],
-            state=oauth_data['state']
-        )
-        
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to start OAuth2 flow: {str(e)}"
-        )
-
-
-@sdk_router.get("/toolkits/{toolkit_key}/connections", response_model=List[ConnectionResponse])
-def get_toolkit_connections_sdk(
-    toolkit_key: str,
-    current_user: m.User = Depends(current_user_from_api_key),
-    db: Session = Depends(get_db)
-):
-    """Get all connections for an app (SDK version)."""
-    # Verify toolkit exists
-    _get_active_toolkit_or_404(db, toolkit_key)
-    
-    connections = ConnectionService.get_user_connections(
-        db=db,
-        user_id=current_user.user_id,
-        app_key=toolkit_key
-    )
-    
-    return [ConnectionResponse.from_orm(conn) for conn in connections]
-
-
-@sdk_router.get("/connections/{connection_id}", response_model=ConnectionResponse)
-def get_connection_sdk(
-    connection_id: str,
-    current_user: m.User = Depends(current_user_from_api_key),
-    db: Session = Depends(get_db)
-):
-    """Get a specific connection (SDK version)."""
-    connection = db.query(m.Connection).filter(
-        m.Connection.id == connection_id,
-        m.Connection.user_id == current_user.user_id
-    ).first()
-    
-    if not connection:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Connection not found"
-        )
-    
-    return ConnectionResponse.from_orm(connection)
-
-
-@sdk_router.patch("/connections/{connection_id}", response_model=ConnectionResponse)
-def update_connection_sdk(
-    connection_id: str,
-    request: ConnectionUpdateRequest,
-    current_user: m.User = Depends(current_user_from_api_key),
-    db: Session = Depends(get_db)
-):
-    """Update a connection (SDK version)."""
-    connection = db.query(m.Connection).filter(
-        m.Connection.id == connection_id,
-        m.Connection.user_id == current_user.user_id
-    ).first()
-    
-    if not connection:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Connection not found"
-        )
-    
-    # Update connection fields
-    if request.name is not None:
-        connection.name = request.name
-    if request.enabled is not None:
-        connection.enabled = request.enabled
-    if request.priority is not None:
-        connection.priority = request.priority
-    if request.labels is not None:
-        connection.labels = request.labels
-    
-    connection.updated_at = datetime.utcnow()
-    
-    # Handle credential rotation
-    if request.rotate_credentials:
-        # TODO: Implement credential rotation
-        pass
-    
-    db.commit()
-    db.refresh(connection)
-    
-    return ConnectionResponse.from_orm(connection)
-
-
-@sdk_router.post("/connections/{connection_id}/test", response_model=ConnectionTestResponse)
-def test_connection_sdk(
-    connection_id: str,
-    current_user: m.User = Depends(current_user_from_api_key),
-    db: Session = Depends(get_db)
-):
-    """Test a connection (SDK version)."""
-    connection = db.query(m.Connection).filter(
-        m.Connection.id == connection_id,
-        m.Connection.user_id == current_user.user_id
-    ).first()
-    
-    if not connection:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Connection not found"
-        )
-    
-    success = ConnectionService.test_connection(db, connection_id)
-    
-    return ConnectionTestResponse(
-        success=success,
-        message="Connection test successful" if success else "Connection test failed",
-        tested_at=datetime.utcnow()
-    )
-
-
-@sdk_router.post("/connections/{connection_id}/refresh", response_model=ConnectionRefreshResponse)
-def refresh_connection_sdk(
-    connection_id: str,
-    current_user: m.User = Depends(current_user_from_api_key),
-    db: Session = Depends(get_db)
-):
-    """Refresh a connection (SDK version)."""
-    connection = db.query(m.Connection).filter(
-        m.Connection.id == connection_id,
-        m.Connection.user_id == current_user.user_id
-    ).first()
-    
-    if not connection:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Connection not found"
-        )
-    
-    try:
-        # Refresh connection tokens
-        success = ConnectionService.refresh_connection_tokens(db, connection)
-        
-        return ConnectionRefreshResponse(
-            success=success,
-            message="Token refresh successful" if success else "Token refresh failed",
-            refreshed_at=datetime.utcnow()
-        )
-        
-    except Exception as e:
-        return ConnectionRefreshResponse(
-            success=False,
-            message=f"Token refresh failed: {str(e)}",
-            refreshed_at=datetime.utcnow()
-        )
-
-
-@sdk_router.delete("/connections/{connection_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_connection_sdk(
-    connection_id: str,
-    current_user: m.User = Depends(current_user_from_api_key),
-    db: Session = Depends(get_db)
-):
-    """Delete a connection (SDK version)."""
-    connection = db.query(m.Connection).filter(
-        m.Connection.id == connection_id,
-        m.Connection.user_id == current_user.user_id
-    ).first()
-    
-    if not connection:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Connection not found"
-        )
-    
-    db.delete(connection)
-    db.commit()
-
-
-@sdk_router.get("/connections/{connection_id}/tools", response_model=EffectiveToolsResponse)
-def get_connection_tools_sdk(
-    connection_id: str,
-    include_disabled: bool = Query(False, description="Include disabled tools"),
-    current_user: m.User = Depends(current_user_from_api_key),
-    db: Session = Depends(get_db)
-):
-    """Get effective tools for a connection (SDK version)."""
-    # Verify connection ownership
-    connection = db.query(m.Connection).filter(
-        m.Connection.id == connection_id,
-        m.Connection.user_id == current_user.user_id
-    ).first()
-    
-    if not connection:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Connection not found"
-        )
-    
-    result = ToolOverrideService.get_effective_tools(
-        db=db,
-        connection_id=connection_id,
-        include_disabled=include_disabled
-    )
-    
-    return EffectiveToolsResponse(**result)
-
-
-@sdk_router.patch("/connections/{connection_id}/tools/{tool_key}", response_model=ToolOverrideResponse)
-def upsert_tool_override_sdk(
-    connection_id: str,
-    tool_key: str,
-    request: ToolOverrideRequest,
-    current_user: m.User = Depends(current_user_from_api_key),
-    db: Session = Depends(get_db)
-):
-    """Create or update tool override (SDK version)."""
-    # Verify connection ownership
-    connection = db.query(m.Connection).filter(
-        m.Connection.id == connection_id,
-        m.Connection.user_id == current_user.user_id
-    ).first()
-    
-    if not connection:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Connection not found"
-        )
-    
-    override = ToolOverrideService.upsert_tool_override(
-        db=db,
-        connection_id=connection_id,
-        tool_key=tool_key,
-        enabled=request.enabled,
-        config=request.config
-    )
-    
-    return ToolOverrideResponse.from_orm(override)
-
-
-@sdk_router.get("/connections/{connection_id}/manifest", response_model=MCPManifestResponse)
-def get_mcp_manifest_sdk(
-    connection_id: str,
-    include_secrets: bool = Query(False, description="Include secrets in manifest"),
-    current_user: m.User = Depends(current_user_from_api_key),
-    db: Session = Depends(get_db)
-):
-    """Get MCP manifest for a connection (SDK version)."""
-    # Verify connection ownership
-    connection = db.query(m.Connection).filter(
-        m.Connection.id == connection_id,
-        m.Connection.user_id == current_user.user_id
-    ).first()
-    
-    if not connection:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Connection not found"
-        )
-    
-    # Verify connection is valid and MCP-enabled
-    if not connection.enabled or connection.status.value != "valid":
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Connection is not valid or enabled"
-        )
-    
-    toolkit = db.query(m.Toolkit).filter(m.Toolkit.id == connection.toolkit_id).first()
-    if not toolkit or "mcp" not in toolkit.toolkit_type:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Toolkit does not support MCP"
-        )
-    
-    # Get effective tools
-    tools_result = ToolOverrideService.get_effective_tools(
-        db=db,
-        connection_id=connection_id,
-        include_disabled=False
-    )
-    
-    # Build manifest
-    tools = [
-        {
-            "tool_key": tool["tool_key"],
-            "enabled": tool["enabled"],
-            "config": tool["config"]
-        }
-        for tool in tools_result["tools"]
-    ]
-    
-    headers = {}
-    if not include_secrets:
-        headers["Authorization"] = "Bearer ***masked***"
-    else:
-        # TODO: Decrypt and include actual credentials
-        headers["Authorization"] = "Bearer ***masked***"
-    
-    return MCPManifestResponse(
-        endpoint_url=connection.mcp_endpoint_url or "",
-        transport=connection.mcp_transport or "websocket",
-        protocol_version=connection.mcp_protocol_version or "2024-11-05",
-        headers=headers,
-        tools=tools
-    )
-
-
+# Common Router (OAuth Callback)
 # =============================================================================
-# GUI Router (JWT Authentication)
-# =============================================================================
-
-gui_router = APIRouter(prefix="/v1/gui", tags=["connections-gui"])
-
-# GUI endpoints mirror SDK endpoints but use JWT authentication
-# For brevity, implementing key endpoints only
-
-@gui_router.get("/toolkits/{toolkit_key}/connections", response_model=List[ConnectionResponse])
-def get_toolkit_connections_gui(
-    toolkit_key: str,
-    current_user: m.User = Depends(current_user_from_jwt),
-    db: Session = Depends(get_db)
-):
-    """Get all connections for an app (GUI version)."""
-    # Verify toolkit exists
-    toolkit = db.query(m.Toolkit).filter(m.Toolkit.key == toolkit_key, m.Toolkit.is_active == True).first()
-    if not toolkit:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Toolkit not found"
-        )
-    
-    connections = ConnectionService.get_user_connections(
-        db=db,
-        user_id=current_user.user_id,
-        app_key=toolkit_key
-    )
-    
-    return [ConnectionResponse.from_orm(conn) for conn in connections]
-
-
-@gui_router.post("/toolkits/{toolkit_key}/connections", response_model=ConnectionResponse, status_code=status.HTTP_201_CREATED)
-def create_connection_gui(
-    toolkit_key: str,
-    request: ConnectionCreateRequest,
-    current_user: m.User = Depends(current_user_from_jwt),
-    db: Session = Depends(get_db)
-):
-    """Create a new connection (GUI version)."""
-    # Verify toolkit exists
-    toolkit = db.query(m.Toolkit).filter(m.Toolkit.key == toolkit_key, m.Toolkit.is_active == True).first()
-    if not toolkit:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Toolkit not found"
-        )
-    
-    # Create connection
-    connection = ConnectionService.create_connection(
-        db=db,
-        user_id=current_user.user_id,
-        app_key=toolkit_key,
-        name=request.name,
-        auth_method=request.auth_method,
-        credentials=request.credentials,
-        scopes=request.scopes,
-        labels=request.labels
-    )
-    
-    return ConnectionResponse.from_orm(connection)
-
-
-@gui_router.get("/connections/{connection_id}/tools", response_model=EffectiveToolsResponse)
-def get_connection_tools_gui(
-    connection_id: str,
-    include_disabled: bool = Query(False, description="Include disabled tools"),
-    current_user: m.User = Depends(current_user_from_jwt),
-    db: Session = Depends(get_db)
-):
-    """Get effective tools for a connection (GUI version)."""
-    # Verify connection ownership
-    connection = db.query(m.Connection).filter(
-        m.Connection.id == connection_id,
-        m.Connection.user_id == current_user.user_id
-    ).first()
-    
-    if not connection:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Connection not found"
-        )
-    
-    result = ToolOverrideService.get_effective_tools(
-        db=db,
-        connection_id=connection_id,
-        include_disabled=include_disabled
-    )
-    
-    return EffectiveToolsResponse(**result)
-
-
-@gui_router.delete("/connections/{connection_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_connection_gui(
-    connection_id: str,
-    current_user: m.User = Depends(current_user_from_jwt),
-    db: Session = Depends(get_db)
-):
-    """Delete a connection (GUI version)."""
-    connection = db.query(m.Connection).filter(
-        m.Connection.id == connection_id,
-        m.Connection.user_id == current_user.user_id
-    ).first()
-    
-    if not connection:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Connection not found"
-        )
-    
-    db.delete(connection)
-    db.commit()
 
 
 # =============================================================================
@@ -646,6 +135,371 @@ def oauth_callback(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"OAuth callback processing failed: {str(e)}"
         )
+
+
+
+# Small deduplication: Unified toolkit validity validation
+
+def _get_active_toolkit_or_404(db: Session, toolkit_key: str) -> m.Toolkit:
+    toolkit = db.query(m.Toolkit).filter(m.Toolkit.key == toolkit_key, m.Toolkit.is_active == True).first()
+    if not toolkit:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Toolkit not found"
+        )
+    return toolkit
+
+
+# =============================================================================
+# Router Factory Implementation
+# =============================================================================
+
+def make_connections_router(config: RouterConfig) -> APIRouter:
+    """Create a connections router with the specified configuration.
+    
+    Args:
+        config: Router configuration (prefix, auth dependency, etc.)
+        
+    Returns:
+        Configured APIRouter with all connections endpoints
+    """
+    router = APIRouter(
+        prefix=config.prefix,
+        tags=[f"connections-{config.prefix.split('/')[-1]}"]
+    )
+    
+    @router.get("/toolkits/{toolkit_key}/tools", response_model=List[ToolDefinitionResponse])
+    def get_toolkit_tools(
+        toolkit_key: str,
+        current_user: m.User = Depends(config.current_user_dep),
+        db: Session = Depends(get_db)
+    ):
+        """Get tool definitions for an app from ToolRegistry."""
+        # Verify toolkit exists and user has access
+        _get_active_toolkit_or_404(db, toolkit_key)
+        
+        # Get tools from registry
+        registry = get_tool_registry()
+        tool_defs = registry.list_tools(toolkit_key)
+        
+        return [
+            ToolDefinitionResponse(
+                tool_key=tool.tool_key,
+                name=tool.name,
+                description=tool.description,
+                input_schema=tool.input_schema,
+                default_enabled=tool.default_enabled,
+                default_config=tool.default_config,
+                required_scopes=tool.required_scopes,
+                version=tool.version,
+                digest=tool.digest
+            )
+            for tool in tool_defs
+        ]
+
+    @router.post("/toolkits/{toolkit_key}/connections", response_model=ConnectionResponse, status_code=status.HTTP_201_CREATED)
+    def create_connection(
+        toolkit_key: str,
+        request: ConnectionCreateRequest,
+        current_user: m.User = Depends(config.current_user_dep),
+        db: Session = Depends(get_db)
+    ):
+        """Create a new connection."""
+        # Verify toolkit exists
+        _get_active_toolkit_or_404(db, toolkit_key)
+        
+        # Create connection
+        connection = ConnectionService.create_connection(
+            db=db,
+            user_id=current_user.user_id,
+            app_key=toolkit_key,
+            name=request.name,
+            auth_method=request.auth_method,
+            credentials=request.credentials,
+            scopes=request.scopes,
+            labels=request.labels
+        )
+        
+        return ConnectionResponse.from_orm(connection)
+
+    @router.post("/toolkits/{toolkit_key}/connections/oauth2-start", response_model=ConnectionOAuth2StartResponse)
+    def start_oauth2_flow(
+        toolkit_key: str,
+        request: ConnectionOAuth2StartRequest,
+        current_user: m.User = Depends(config.current_user_dep),
+        db: Session = Depends(get_db)
+    ):
+        """Start OAuth2 flow for a connection."""
+        try:
+            # First create an OAuth2 connection
+            _get_active_toolkit_or_404(db, toolkit_key)
+            connection = ConnectionService.create_connection(
+                db=db,
+                user_id=current_user.user_id,
+                app_key=toolkit_key,
+                name=request.name,
+                auth_method=m.AuthMethod.oauth2,
+                labels=request.labels,
+                scopes=request.scopes,
+                redirect_uri=request.redirect_uri
+            )
+            
+            # Start OAuth2 flow
+            oauth_data = ConnectionService.start_oauth2_flow(
+                db=db,
+                user_id=current_user.user_id,
+                connection_id=connection.id,
+                redirect_uri=request.redirect_uri,
+                scopes=request.scopes
+            )
+            
+            return ConnectionOAuth2StartResponse(
+                connection_id=connection.id,
+                auth_url=oauth_data['auth_url'],
+                state=oauth_data['state']
+            )
+            
+        except HTTPException:
+            raise
+        except Exception as e:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Failed to start OAuth2 flow: {str(e)}"
+            )
+
+    @router.get("/toolkits/{toolkit_key}/connections", response_model=List[ConnectionResponse])
+    def get_toolkit_connections(
+        toolkit_key: str,
+        current_user: m.User = Depends(config.current_user_dep),
+        db: Session = Depends(get_db)
+    ):
+        """Get all connections for an app."""
+        # Verify toolkit exists
+        _get_active_toolkit_or_404(db, toolkit_key)
+        
+        connections = ConnectionService.get_user_connections(
+            db=db,
+            user_id=current_user.user_id,
+            app_key=toolkit_key
+        )
+        
+        return [ConnectionResponse.from_orm(conn) for conn in connections]
+
+    @router.get("/connections/{connection_id}", response_model=ConnectionResponse)
+    def get_connection(
+        connection_id: str,
+        current_user: m.User = Depends(config.current_user_dep),
+        db: Session = Depends(get_db)
+    ):
+        """Get a specific connection."""
+        connection = db.query(m.Connection).filter(
+            m.Connection.id == connection_id,
+            m.Connection.user_id == current_user.user_id
+        ).first()
+        
+        if not connection:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Connection not found"
+            )
+        
+        return ConnectionResponse.from_orm(connection)
+
+    @router.patch("/connections/{connection_id}", response_model=ConnectionResponse)
+    def update_connection(
+        connection_id: str,
+        request: ConnectionUpdateRequest,
+        current_user: m.User = Depends(config.current_user_dep),
+        db: Session = Depends(get_db)
+    ):
+        """Update a connection."""
+        connection = db.query(m.Connection).filter(
+            m.Connection.id == connection_id,
+            m.Connection.user_id == current_user.user_id
+        ).first()
+        
+        if not connection:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Connection not found"
+            )
+        
+        # Update connection
+        updated_connection = ConnectionService.update_connection(
+            db=db,
+            connection_id=connection_id,
+            update_data=request
+        )
+        
+        return ConnectionResponse.from_orm(updated_connection)
+
+    @router.post("/connections/{connection_id}/test", response_model=ConnectionTestResponse)
+    def test_connection(
+        connection_id: str,
+        current_user: m.User = Depends(config.current_user_dep),
+        db: Session = Depends(get_db)
+    ):
+        """Test a connection."""
+        connection = db.query(m.Connection).filter(
+            m.Connection.id == connection_id,
+            m.Connection.user_id == current_user.user_id
+        ).first()
+        
+        if not connection:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Connection not found"
+            )
+        
+        # Test connection
+        test_result = ConnectionService.test_connection(db=db, connection_id=connection_id)
+        
+        return ConnectionTestResponse(**test_result)
+
+    @router.post("/connections/{connection_id}/refresh", response_model=ConnectionRefreshResponse)
+    def refresh_connection(
+        connection_id: str,
+        current_user: m.User = Depends(config.current_user_dep),
+        db: Session = Depends(get_db)
+    ):
+        """Refresh a connection's credentials."""
+        connection = db.query(m.Connection).filter(
+            m.Connection.id == connection_id,
+            m.Connection.user_id == current_user.user_id
+        ).first()
+        
+        if not connection:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Connection not found"
+            )
+        
+        # Refresh connection
+        refresh_result = ConnectionService.refresh_connection(db=db, connection_id=connection_id)
+        
+        return ConnectionRefreshResponse(**refresh_result)
+
+    @router.delete("/connections/{connection_id}", status_code=status.HTTP_204_NO_CONTENT)
+    def delete_connection(
+        connection_id: str,
+        current_user: m.User = Depends(config.current_user_dep),
+        db: Session = Depends(get_db)
+    ):
+        """Delete a connection."""
+        connection = db.query(m.Connection).filter(
+            m.Connection.id == connection_id,
+            m.Connection.user_id == current_user.user_id
+        ).first()
+        
+        if not connection:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Connection not found"
+            )
+        
+        db.delete(connection)
+        db.commit()
+
+    @router.get("/connections/{connection_id}/tools", response_model=EffectiveToolsResponse)
+    def get_connection_tools(
+        connection_id: str,
+        include_disabled: bool = Query(False, description="Include disabled tools"),
+        current_user: m.User = Depends(config.current_user_dep),
+        db: Session = Depends(get_db)
+    ):
+        """Get effective tools for a connection."""
+        # Verify connection ownership
+        connection = db.query(m.Connection).filter(
+            m.Connection.id == connection_id,
+            m.Connection.user_id == current_user.user_id
+        ).first()
+        
+        if not connection:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Connection not found"
+            )
+        
+        result = ToolOverrideService.get_effective_tools(
+            db=db,
+            connection_id=connection_id,
+            include_disabled=include_disabled
+        )
+        
+        return EffectiveToolsResponse(**result)
+
+    @router.patch("/connections/{connection_id}/tools/{tool_key}", response_model=ToolOverrideResponse)
+    def upsert_tool_override(
+        connection_id: str,
+        tool_key: str,
+        request: ToolOverrideRequest,
+        current_user: m.User = Depends(config.current_user_dep),
+        db: Session = Depends(get_db)
+    ):
+        """Create or update a tool override for a connection."""
+        # Verify connection ownership
+        connection = db.query(m.Connection).filter(
+            m.Connection.id == connection_id,
+            m.Connection.user_id == current_user.user_id
+        ).first()
+        
+        if not connection:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Connection not found"
+            )
+        
+        # Upsert tool override
+        override = ToolOverrideService.upsert_tool_override(
+            db=db,
+            connection_id=connection_id,
+            tool_key=tool_key,
+            override_data=request
+        )
+        
+        return ToolOverrideResponse.from_orm(override)
+
+    @router.get("/connections/{connection_id}/manifest", response_model=MCPManifestResponse)
+    def get_mcp_manifest(
+        connection_id: str,
+        include_secrets: bool = Query(False, description="Include secrets in manifest"),
+        current_user: m.User = Depends(config.current_user_dep),
+        db: Session = Depends(get_db)
+    ):
+        """Get MCP manifest for a connection."""
+        # Verify connection ownership
+        connection = db.query(m.Connection).filter(
+            m.Connection.id == connection_id,
+            m.Connection.user_id == current_user.user_id
+        ).first()
+        
+        if not connection:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Connection not found"
+            )
+        
+        # Generate manifest
+        manifest_data = ConnectionService.generate_mcp_manifest(
+            db=db,
+            connection_id=connection_id,
+            include_secrets=include_secrets
+        )
+        
+        return MCPManifestResponse(**manifest_data)
+    
+    return router
+
+
+# =============================================================================
+# Create SDK and GUI routers using factory
+# =============================================================================
+
+# Create SDK router (API Key authentication)
+sdk_router = make_connections_router(SDK_CONFIG)
+
+# Create GUI router (JWT authentication)  
+gui_router = make_connections_router(GUI_CONFIG)
 
 
 @gui_router.get("/toolkits/{toolkit_key}/stats")

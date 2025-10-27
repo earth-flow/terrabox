@@ -411,3 +411,7 @@ def remove_oauth_account(account_id: int, current_user: m.User = Depends(current
     db.commit()
     
     return {"message": "OAuth account has been removed"}
+
+
+# Export routers for main app
+__all__ = ["common_router", "sdk_router", "gui_router", "make_auth_router"]
