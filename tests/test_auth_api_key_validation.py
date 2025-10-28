@@ -1,7 +1,7 @@
 import pytest
 from fastapi.testclient import TestClient
 
-from terralink_platform.main import create_app
+from terrakit.main import create_app
 
 
 @pytest.fixture()

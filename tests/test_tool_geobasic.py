@@ -14,7 +14,7 @@ import json
 import math
 
 # Import the toolkit setup and handlers indirectly by calling setup(registrar)
-from src.terralink_platform.toolkits.geobasic import setup as geo_basic_setup
+from src.terrakit.toolkits.geobasic import setup as geo_basic_setup
 
 # -----------------------------
 # Mock Registrar (compatible with your example)
