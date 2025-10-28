@@ -89,14 +89,23 @@ class ToolService:
     def get_toolkits_with_status(db: Session, user_id: str) -> List[ToolkitOut]:
         """Get all toolkits with their availability status for a user."""
         from .connection_service import ConnectionService
+        from ...db.models import Toolkit as ToolkitModel
         
         toolkits = list_toolkits()
         toolkit_outs = []
         
         for toolkit in toolkits:
-            # Check if user has valid connections for this toolkit
-            connection = ConnectionService.select_connection(db, user_id, toolkit.name)
-            status = "connected" if connection else "available"
+            # Check if toolkit is active in database
+            db_toolkit = db.query(ToolkitModel).filter(ToolkitModel.key == toolkit.name).first()
+            is_active = db_toolkit.is_active if db_toolkit else True  # Default to active if not in DB
+            
+            # Determine toolkit status based on is_active and connection status
+            if not is_active:
+                status = "inactive"
+            else:
+                # Check if user has valid connections for this toolkit
+                connection = ConnectionService.select_connection(db, user_id, toolkit.name)
+                status = "connected" if connection else "active"
             
             # Get tools count for this toolkit
             toolkit_tools = list_tools(toolkit.name)
@@ -108,10 +117,13 @@ class ToolService:
             # Convert tools to ToolSpecOut objects
             tool_specs = []
             for tool in toolkit_tools:
-                # Calculate tool status based on connection requirements
+                # Calculate tool status based on connection requirements and toolkit status
                 tool_status = "available"
-                if tool.requires_connection:
+                if not is_active:
+                    tool_status = "unavailable"
+                elif tool.requires_connection:
                     # If tool requires connection but user doesn't have one, mark as unavailable
+                    connection = ConnectionService.select_connection(db, user_id, toolkit.name)
                     if not connection:
                         tool_status = "unavailable"
                 
@@ -131,11 +143,12 @@ class ToolService:
                 slug=toolkit.name,  # Use name as slug since Toolkit doesn't have slug
                 name=toolkit.name,
                 description=toolkit.description,
+                status=status,
                 tools=tool_specs,
                 metadata={
                     "tools_count": tools_count,
                     "connection_required_count": connection_required_count,
-                    "status": status
+                    "is_active": is_active
                 }
             )
             toolkit_outs.append(toolkit_out)

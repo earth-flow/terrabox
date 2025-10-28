@@ -156,6 +156,7 @@ class ToolkitOut(BaseModel):
     slug: str
     name: str
     description: str
+    status: str = "active"  # active, inactive, connected, available
     tools: List[ToolSpecOut] = []
     metadata: Optional[Dict[str, Any]] = None
 
