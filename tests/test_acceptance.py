@@ -344,16 +344,16 @@ def test_health_endpoints():
     """测试健康检查和配置端点"""
     print("\n🧪 测试5: 验证健康检查和配置端点")
     
-    # 测试健康检查
+    # 测试健康检查（不需要认证）
     health_response = requests.get(f"{BASE_URL}/v1/tools/health")
     print(f"   健康检查状态码: {health_response.status_code}")
     
-    # 测试配置端点
-    config_response = requests.get(f"{BASE_URL}/v1/tools/config")
+    # 测试配置端点（需要认证）
+    config_response = requests.get(f"{BASE_URL}/v1/tools/config", headers=AUTH_HEADERS)
     print(f"   配置端点状态码: {config_response.status_code}")
     
-    # 测试指标端点
-    metrics_response = requests.get(f"{BASE_URL}/v1/tools/metrics")
+    # 测试指标端点（需要认证）
+    metrics_response = requests.get(f"{BASE_URL}/v1/tools/metrics", headers=AUTH_HEADERS)
     print(f"   指标端点状态码: {metrics_response.status_code}")
     if metrics_response.status_code == 200:
         try:
