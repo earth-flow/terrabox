@@ -108,12 +108,19 @@ class ToolService:
             # Convert tools to ToolSpecOut objects
             tool_specs = []
             for tool in toolkit_tools:
+                # Calculate tool status based on connection requirements
+                tool_status = "available"
+                if tool.requires_connection:
+                    # If tool requires connection but user doesn't have one, mark as unavailable
+                    if not connection:
+                        tool_status = "unavailable"
+                
                 tool_spec = ToolSpecOut(
                     slug=tool.slug,
                     name=tool.name,
                     description=tool.description,
                     requires_connection=tool.requires_connection,
-                    status="available",
+                    status=tool_status,
                     toolkit_slug=toolkit.name,
                     parameters=tool.parameters if hasattr(tool, 'parameters') else None,
                     metadata=tool.metadata if hasattr(tool, 'metadata') else None
