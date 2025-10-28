@@ -4,13 +4,15 @@ from typing import Dict, List, Optional, Any
 from dataclasses import dataclass
 import hashlib
 import json
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
 # Avoid circular import by importing inside functions when needed
 
 
 class ToolSpec(BaseModel):
     """Tool specification model."""
+    model_config = ConfigDict(from_attributes=True)
+    
     slug: str
     name: str
     description: str
@@ -18,17 +20,13 @@ class ToolSpec(BaseModel):
     requires_connection: bool = False
     required_scopes: Optional[List[str]] = None
 
-    class Config:
-        from_attributes = True
-
 
 class Toolkit(BaseModel):
     """Simple toolkit model for data.py compatibility."""
+    model_config = ConfigDict(from_attributes=True)
+    
     name: str
     description: str
-
-    class Config:
-        from_attributes = True
 
 
 @dataclass

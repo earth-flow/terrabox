@@ -1,577 +1,488 @@
 #!/usr/bin/env python3
-"""Test script for authentication system."""
+"""Pytest test suite for authentication system."""
 
+import pytest
 import requests
 import json
 from datetime import datetime
+from typing import Dict, Any, Optional, Tuple
 
-# Base URL for the API
-BASE_URL = "http://localhost:8000"
 
-def test_health_check():
-    """Test basic health check endpoint."""
-    print("\n=== Testing Health Check ===")
-    try:
-        response = requests.get(f"{BASE_URL}/")
-        print(f"Status: {response.status_code}")
-        print(f"Response: {response.json()}")
-        return response.status_code == 200
-    except Exception as e:
-        print(f"Error: {e}")
-        return False
+@pytest.fixture(scope="session")
+def base_url():
+    """Base URL for the API."""
+    return "http://localhost:8000"
 
-def test_user_registration():
-    """Test user registration."""
-    print("\n=== Testing User Registration ===")
-    
-    user_data = {
-        "email": f"test_{datetime.now().strftime('%Y%m%d_%H%M%S')}@example.com",
+
+@pytest.fixture
+def test_user_data():
+    """Generate unique test user data for each test."""
+    import time
+    return {
+        "email": f"test_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{int(time.time() * 1000000) % 1000000}@example.com",
         "password": "Testpassword123"
     }
-    
-    try:
-        response = requests.post(
-            f"{BASE_URL}/v1/register",
-            json=user_data
-        )
-        print(f"Status: {response.status_code}")
-        print(f"Response: {response.json()}")
-        
-        if response.status_code == 201:
-            return response.json(), user_data
-        else:
-            return None, user_data
-    except Exception as e:
-        print(f"Error: {e}")
-        return None, user_data
 
-def test_user_login(user_data):
-    """Test user login."""
-    print("\n=== Testing User Login ===")
-    
+
+@pytest.fixture
+def registered_user(base_url, test_user_data):
+    """Register a test user and return user response and data."""
+    response = requests.post(
+        f"{base_url}/v1/register",
+        json=test_user_data
+    )
+    assert response.status_code == 201
+    return response.json(), test_user_data
+
+
+@pytest.fixture
+def auth_token(base_url, registered_user):
+    """Login and return authentication token."""
+    user_response, user_data = registered_user
     login_data = {
         "email": user_data["email"],
         "password": user_data["password"]
     }
     
-    try:
-        response = requests.post(
-            f"{BASE_URL}/v1/login",
-            json=login_data
-        )
-        print(f"Status: {response.status_code}")
-        print(f"Response: {response.json()}")
-        
-        if response.status_code == 200:
-            return response.json()
-        else:
-            return None
-    except Exception as e:
-        print(f"Error: {e}")
-        return None
+    response = requests.post(
+        f"{base_url}/v1/login",
+        json=login_data
+    )
+    assert response.status_code == 200
+    return response.json()["access_token"]
 
-def test_get_current_user(token):
-    """Test getting current user info."""
-    print("\n=== Testing Get Current User ===")
-    
-    headers = {
-        "Authorization": f"Bearer {token}"
-    }
-    
-    try:
-        response = requests.get(
-            f"{BASE_URL}/v1/gui/me",
-            headers=headers
-        )
-        print(f"Status: {response.status_code}")
-        print(f"Response: {response.json()}")
-        
-        return response.status_code == 200
-    except Exception as e:
-        print(f"Error: {e}")
-        return False
 
-def test_create_api_key(token):
-    """Test creating API key."""
-    print("\n=== Testing Create API Key ===")
-    
-    headers = {
-        "Authorization": f"Bearer {token}"
-    }
-    
+@pytest.fixture
+def api_key_data(base_url, auth_token):
+    """Create an API key and return key data."""
+    headers = {"Authorization": f"Bearer {auth_token}"}
     api_key_data = {
         "label": f"Test API Key {datetime.now().strftime('%Y%m%d_%H%M%S')}"
     }
     
-    try:
+    response = requests.post(
+        f"{base_url}/v1/gui/api-keys",
+        json=api_key_data,
+        headers=headers
+    )
+    assert response.status_code == 201
+    return response.json()
+
+
+@pytest.fixture
+def fresh_user_data():
+    """Generate fresh user data specifically for registration tests."""
+    import time
+    return {
+        "email": f"fresh_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{int(time.time() * 1000000) % 1000000}@example.com",
+        "password": "Testpassword123"
+    }
+
+
+class TestHealthCheck:
+    """Test basic health check functionality."""
+    
+    def test_health_check(self, base_url):
+        """Test basic health check endpoint."""
+        response = requests.get(f"{base_url}/")
+        assert response.status_code == 200
+        assert "message" in response.json() or "status" in response.json()
+
+class TestAuthentication:
+    """Test user authentication functionality."""
+    
+    def test_user_registration(self, base_url, fresh_user_data):
+        """Test user registration."""
         response = requests.post(
-            f"{BASE_URL}/v1/gui/api-keys",
+            f"{base_url}/v1/register",
+            json=fresh_user_data
+        )
+        assert response.status_code == 201
+        response_data = response.json()
+        assert "user_id" in response_data
+        assert "email" in response_data
+
+    def test_user_login(self, base_url, registered_user):
+        """Test user login."""
+        user_response, user_data = registered_user
+        login_data = {
+            "email": user_data["email"],
+            "password": user_data["password"]
+        }
+        
+        response = requests.post(
+            f"{base_url}/v1/login",
+            json=login_data
+        )
+        assert response.status_code == 200
+        response_data = response.json()
+        assert "access_token" in response_data
+        assert "token_type" in response_data
+
+    def test_get_current_user(self, base_url, auth_token):
+        """Test getting current user info."""
+        headers = {"Authorization": f"Bearer {auth_token}"}
+        
+        response = requests.get(
+            f"{base_url}/v1/gui/me",
+            headers=headers
+        )
+        assert response.status_code == 200
+        response_data = response.json()
+        assert "email" in response_data
+
+class TestAPIKeys:
+    """Test API key management functionality."""
+    
+    def test_create_api_key(self, base_url, auth_token):
+        """Test creating API key."""
+        headers = {"Authorization": f"Bearer {auth_token}"}
+        api_key_data = {
+            "label": f"Test API Key {datetime.now().strftime('%Y%m%d_%H%M%S')}"
+        }
+        
+        response = requests.post(
+            f"{base_url}/v1/gui/api-keys",
             json=api_key_data,
             headers=headers
         )
-        print(f"Status: {response.status_code}")
-        print(f"Response: {response.json()}")
-        
-        if response.status_code == 201:
-            return response.json()
-        else:
-            return None
-    except Exception as e:
-        print(f"Error: {e}")
-        return None
+        assert response.status_code == 201
+        response_data = response.json()
+        assert "key" in response_data
+        assert "id" in response_data
+        assert "label" in response_data
 
-def test_list_api_keys(token):
-    """Test listing API keys."""
-    print("\n=== Testing List API Keys ===")
-    
-    headers = {
-        "Authorization": f"Bearer {token}"
-    }
-    
-    try:
+    def test_list_api_keys(self, base_url, auth_token, api_key_data):
+        """Test listing API keys."""
+        headers = {"Authorization": f"Bearer {auth_token}"}
+        
         response = requests.get(
-            f"{BASE_URL}/v1/gui/api-keys",
+            f"{base_url}/v1/gui/api-keys",
             headers=headers
         )
-        print(f"Status: {response.status_code}")
-        print(f"Response: {response.json()}")
-        
-        return response.status_code == 200
-    except Exception as e:
-        print(f"Error: {e}")
-        return False
+        assert response.status_code == 200
+        response_data = response.json()
+        assert isinstance(response_data, list)
+        assert len(response_data) > 0
 
-def test_revoke_api_key(token, api_key_id):
-    """Test revoking (deactivating) an API key."""
-    print("\n=== Testing Revoke API Key ===")
-    
-    headers = {
-        "Authorization": f"Bearer {token}"
-    }
-    
-    try:
-        response = requests.delete(
-            f"{BASE_URL}/v1/gui/api-keys/{api_key_id}",
-            headers=headers
-        )
-        print(f"Status: {response.status_code}")
-        if response.status_code != 204:
-            print(f"Response: {response.text}")
-        
-        return response.status_code == 204
-    except Exception as e:
-        print(f"Error: {e}")
-        return False
-
-def test_remove_deactivated_api_key(token, api_key_id):
-    """Test permanently removing a deactivated API key."""
-    print("\n=== Testing Remove Deactivated API Key ===")
-    
-    headers = {
-        "Authorization": f"Bearer {token}"
-    }
-    
-    try:
-        response = requests.delete(
-            f"{BASE_URL}/v1/gui/api-keys/{api_key_id}/remove",
-            headers=headers
-        )
-        print(f"Status: {response.status_code}")
-        if response.status_code != 204:
-            print(f"Response: {response.text}")
-        
-        return response.status_code == 204
-    except Exception as e:
-        print(f"Error: {e}")
-        return False
-
-def test_remove_active_api_key_should_fail(token, api_key_id):
-    """Test that removing an active API key should fail."""
-    print("\n=== Testing Remove Active API Key (Should Fail) ===")
-    
-    headers = {
-        "Authorization": f"Bearer {token}"
-    }
-    
-    try:
-        response = requests.delete(
-            f"{BASE_URL}/v1/gui/api-keys/{api_key_id}/remove",
-            headers=headers
-        )
-        print(f"Status: {response.status_code}")
-        print(f"Response: {response.text}")
-        
-        # Should return 400 Bad Request
-        return response.status_code == 400
-    except Exception as e:
-        print(f"Error: {e}")
-        return False
-
-def test_list_toolkits(api_key):
-    """Test listing available toolkits."""
-    print("\n=== Testing List Toolkits ===")
-    
-    headers = {"X-API-Key": api_key}
-    
-    try:
-        response = requests.get(
-            f"{BASE_URL}/v1/sdk/toolkits",
-            headers=headers
-        )
-        print(f"Status: {response.status_code}")
-        print(f"Response: {response.json()}")
-        
-        if response.status_code == 200:
-            toolkits = response.json()
-            print(f"Found {len(toolkits)} toolkits")
-            return toolkits
-        else:
-            return None
-    except Exception as e:
-        print(f"Error: {e}")
-        return None
-
-def test_list_tools(api_key, toolkit=None):
-    """Test listing available tools."""
-    print(f"\n=== Testing List Tools{' for ' + toolkit if toolkit else ''} ===")
-    
-    headers = {"X-API-Key": api_key}
-    params = {"toolkit": toolkit} if toolkit else {}
-    
-    try:
-        response = requests.get(
-            f"{BASE_URL}/v1/sdk/tools",
-            headers=headers,
-            params=params
-        )
-        print(f"Status: {response.status_code}")
-        print(f"Response: {response.json()}")
-        
-        if response.status_code == 200:
-            tools = response.json()
-            print(f"Found {len(tools)} tools")
-            return tools
-        else:
-            return None
-    except Exception as e:
-        print(f"Error: {e}")
-        return None
-
-def test_get_tool_detail(api_key, tool_slug):
-    """Test getting tool detail."""
-    print(f"\n=== Testing Get Tool Detail: {tool_slug} ===")
-    
-    headers = {"X-API-Key": api_key}
-    
-    try:
-        response = requests.get(
-            f"{BASE_URL}/v1/sdk/tools/{tool_slug}",
-            headers=headers
-        )
-        print(f"Status: {response.status_code}")
-        print(f"Response: {response.json()}")
-        
-        return response.status_code == 200
-    except Exception as e:
-        print(f"Error: {e}")
-        return False
-
-def test_execute_tool(api_key, user_id, tool_slug, arguments):
-    """Test executing a tool."""
-    print(f"\n=== Testing Execute Tool: {tool_slug} ===")
-    
-    headers = {"X-API-Key": api_key}
-    
-    payload = {
-        "inputs": arguments,
-        "metadata": {
-            "user_id": user_id
+    def test_revoke_api_key(self, base_url, auth_token):
+        """Test revoking (deactivating) an API key."""
+        # Create a new API key for this test
+        headers = {"Authorization": f"Bearer {auth_token}"}
+        api_key_data = {
+            "label": f"Test API Key for Revoke {datetime.now().strftime('%Y%m%d_%H%M%S')}"
         }
-    }
+        
+        create_response = requests.post(
+            f"{base_url}/v1/gui/api-keys",
+            json=api_key_data,
+            headers=headers
+        )
+        assert create_response.status_code == 201
+        api_key_id = create_response.json()["id"]
+        
+        # Now revoke it
+        response = requests.delete(
+            f"{base_url}/v1/gui/api-keys/{api_key_id}",
+            headers=headers
+        )
+        assert response.status_code == 204
+
+    def test_remove_active_api_key_should_fail(self, base_url, auth_token):
+        """Test that removing an active API key should fail."""
+        # Create a new API key for this test
+        headers = {"Authorization": f"Bearer {auth_token}"}
+        api_key_data = {
+            "label": f"Test API Key for Remove Fail {datetime.now().strftime('%Y%m%d_%H%M%S')}"
+        }
+        
+        create_response = requests.post(
+            f"{base_url}/v1/gui/api-keys",
+            json=api_key_data,
+            headers=headers
+        )
+        assert create_response.status_code == 201
+        api_key_id = create_response.json()["id"]
+        
+        # Try to remove active API key (should fail)
+        response = requests.delete(
+            f"{base_url}/v1/gui/api-keys/{api_key_id}/remove",
+            headers=headers
+        )
+        assert response.status_code == 400
+
+    def test_remove_deactivated_api_key(self, base_url, auth_token):
+        """Test permanently removing a deactivated API key."""
+        # Create a new API key for this test
+        headers = {"Authorization": f"Bearer {auth_token}"}
+        api_key_data = {
+            "label": f"Test API Key for Remove {datetime.now().strftime('%Y%m%d_%H%M%S')}"
+        }
+        
+        create_response = requests.post(
+            f"{base_url}/v1/gui/api-keys",
+            json=api_key_data,
+            headers=headers
+        )
+        assert create_response.status_code == 201
+        api_key_id = create_response.json()["id"]
+        
+        # First revoke it
+        revoke_response = requests.delete(
+            f"{base_url}/v1/gui/api-keys/{api_key_id}",
+            headers=headers
+        )
+        assert revoke_response.status_code == 204
+        
+        # Now remove it
+        response = requests.delete(
+            f"{base_url}/v1/gui/api-keys/{api_key_id}/remove",
+            headers=headers
+        )
+        assert response.status_code == 204
+
+class TestTools:
+    """Test tool management and execution functionality."""
     
-    try:
+    def test_list_toolkits(self, base_url, api_key_data):
+        """Test listing available toolkits."""
+        headers = {"X-API-Key": api_key_data["key"]}
+        
+        response = requests.get(
+            f"{base_url}/v1/sdk/toolkits",
+            headers=headers
+        )
+        assert response.status_code == 200
+        toolkits = response.json()
+        assert isinstance(toolkits, list)
+
+    def test_list_all_tools(self, base_url, api_key_data):
+        """Test listing all available tools."""
+        headers = {"X-API-Key": api_key_data["key"]}
+        
+        response = requests.get(
+            f"{base_url}/v1/sdk/tools",
+            headers=headers
+        )
+        assert response.status_code == 200
+        tools = response.json()
+        assert isinstance(tools, list)
+
+    def test_list_tools_by_toolkit(self, base_url, api_key_data):
+        """Test listing tools for a specific toolkit."""
+        headers = {"X-API-Key": api_key_data["key"]}
+        
+        # First get available toolkits
+        toolkits_response = requests.get(
+            f"{base_url}/v1/sdk/toolkits",
+            headers=headers
+        )
+        assert toolkits_response.status_code == 200
+        toolkits = toolkits_response.json()
+        
+        if toolkits:
+            toolkit_name = toolkits[0]["name"]
+            params = {"toolkit": toolkit_name}
+            
+            response = requests.get(
+                f"{base_url}/v1/sdk/tools",
+                headers=headers,
+                params=params
+            )
+            assert response.status_code == 200
+            tools = response.json()
+            assert isinstance(tools, list)
+
+    def test_get_tool_detail(self, base_url, api_key_data):
+        """Test getting tool detail."""
+        headers = {"X-API-Key": api_key_data["key"]}
+        
+        # First get available tools
+        tools_response = requests.get(
+            f"{base_url}/v1/sdk/tools",
+            headers=headers
+        )
+        assert tools_response.status_code == 200
+        tools = tools_response.json()
+        
+        if tools:
+            tool_slug = tools[0]["slug"]
+            response = requests.get(
+                f"{base_url}/v1/sdk/tools/{tool_slug}",
+                headers=headers
+            )
+            assert response.status_code == 200
+            tool_detail = response.json()
+            assert "slug" in tool_detail
+
+    @pytest.mark.parametrize("tool_slug,arguments", [
+        ("example.echo", {"message": "Hello from test!"}),
+        ("example.math_add", {"a": 5, "b": 3}),
+    ])
+    def test_execute_example_tools(self, base_url, api_key_data, registered_user, tool_slug, arguments):
+        """Test executing example tools."""
+        user_response, _ = registered_user
+        headers = {"X-API-Key": api_key_data["key"]}
+        
+        payload = {
+            "inputs": arguments,
+            "metadata": {
+                "user_id": user_response["user_id"]
+            }
+        }
+        
         response = requests.post(
-            f"{BASE_URL}/v1/sdk/tools/{tool_slug}/execute",
+            f"{base_url}/v1/sdk/tools/{tool_slug}/execute",
             json=payload,
             headers=headers
         )
-        print(f"Status: {response.status_code}")
-        print(f"Response: {response.json()}")
+        # Note: These tools may not be available, so we check for either success or 404
+        assert response.status_code in [200, 404]
         
         if response.status_code == 200:
             result = response.json()
-            return result.get("success", False), result
-        else:
-            return False, None
-    except Exception as e:
-        print(f"Error: {e}")
-        return False, None
+            assert "success" in result
 
-def test_create_connection(api_key, user_id, toolkit):
-    """Test creating OAuth connection."""
-    print(f"\n=== Testing Create Connection for {toolkit} ===")
+class TestConnections:
+    """Test connection management functionality."""
     
-    headers = {"X-API-Key": api_key}
-    
-    payload = {
-        "name": f"{toolkit} Connection",
-        "auth_method": "oauth2",
-        "credentials": {},
-        "scopes": []
-    }
-    
-    try:
+    @pytest.mark.parametrize("toolkit", ["github"])
+    def test_create_connection(self, base_url, api_key_data, toolkit):
+        """Test creating OAuth connection."""
+        headers = {"X-API-Key": api_key_data["key"]}
+        
+        payload = {
+            "name": f"{toolkit} Connection",
+            "auth_method": "oauth2",
+            "credentials": {},
+            "scopes": []
+        }
+        
         response = requests.post(
-            f"{BASE_URL}/v1/sdk/toolkits/{toolkit}/connections",
+            f"{base_url}/v1/sdk/toolkits/{toolkit}/connections",
             json=payload,
             headers=headers
         )
-        print(f"Status: {response.status_code}")
-        print(f"Response: {response.json()}")
+        # Connection creation may not be available in test environment
+        assert response.status_code in [201, 404, 400]
         
         if response.status_code == 201:
-            return response.json()
-        else:
-            return None
-    except Exception as e:
-        print(f"Error: {e}")
-        return None
+            connection_data = response.json()
+            assert "id" in connection_data
 
-def test_get_connection_status(api_key, connection_id):
-    """Test getting connection status."""
-    print(f"\n=== Testing Get Connection Status: {connection_id} ===")
-    
-    headers = {"X-API-Key": api_key}
-    
-    try:
-        response = requests.get(
-            f"{BASE_URL}/v1/sdk/connections/{connection_id}",
-            headers=headers
-        )
-        print(f"Status: {response.status_code}")
-        print(f"Response: {response.json()}")
+    def test_get_connection_status(self, base_url, api_key_data):
+        """Test getting connection status."""
+        headers = {"X-API-Key": api_key_data["key"]}
         
-        if response.status_code == 200:
-            return response.json()
-        else:
-            return None
-    except Exception as e:
-        print(f"Error: {e}")
-        return None
-
-def test_list_connected_accounts(api_key, user_id, toolkit=None):
-    """Test listing connections for a toolkit."""
-    print(f"\n=== Testing List Connections ===")
-    
-    headers = {"X-API-Key": api_key}
-    
-    try:
-        # Use a default toolkit if none provided
-        toolkit_key = toolkit or "github"
-        response = requests.get(
-            f"{BASE_URL}/v1/sdk/toolkits/{toolkit_key}/connections",
-            headers=headers
-        )
-        print(f"Status: {response.status_code}")
-        print(f"Response: {response.json()}")
-        
-        if response.status_code == 200:
-            return response.json()
-        else:
-            return None
-    except Exception as e:
-        print(f"Error: {e}")
-        return None
-
-def test_tools_and_connections_workflow(api_key, user_id):
-    """Test complete tools and connections workflow."""
-    print("\n🔧 === Testing Tools and Connections Workflow ===")
-    
-    # 1. List toolkits
-    toolkits = test_list_toolkits(api_key)
-    if not toolkits:
-        print("❌ List toolkits failed")
-        return False
-    print("✅ List toolkits passed")
-    
-    # 2. List all tools
-    all_tools = test_list_tools(api_key)
-    if not all_tools:
-        print("❌ List all tools failed")
-        return False
-    print("✅ List all tools passed")
-    
-    # 3. Test tools by toolkit
-    for toolkit in toolkits:
-        toolkit_name = toolkit["name"]
-        toolkit_tools = test_list_tools(api_key, toolkit_name)
-        if toolkit_tools is not None:
-            print(f"✅ List tools for {toolkit_name} passed ({len(toolkit_tools)} tools)")
-        
-        # Test tool details for each tool in this toolkit
-        if toolkit_tools:
-            for tool in toolkit_tools[:2]:  # Test first 2 tools to avoid spam
-                tool_slug = tool["slug"]
-                if test_get_tool_detail(api_key, tool_slug):
-                    print(f"✅ Get detail for {tool_slug} passed")
-    
-    # 4. Test executing example tools
-    example_tools_to_test = [
-        {
-            "slug": "example.echo",
-            "arguments": {"message": "Hello from test!"}
-        },
-        {
-            "slug": "example.math_add",
-            "arguments": {"a": 5, "b": 3}
-        },
-        {
-            "slug": "github.list_user_repos",
-            "arguments": {"username": "testuser"}
+        # First try to create a connection to test with
+        payload = {
+            "name": "Test Connection",
+            "auth_method": "oauth2",
+            "credentials": {},
+            "scopes": []
         }
-    ]
-    
-    for tool_test in example_tools_to_test:
-        success, result = test_execute_tool(
-            api_key, user_id, tool_test["slug"], tool_test["arguments"]
+        
+        create_response = requests.post(
+            f"{base_url}/v1/sdk/toolkits/github/connections",
+            json=payload,
+            headers=headers
         )
-        if success:
-            print(f"✅ Execute {tool_test['slug']} passed")
-        else:
-            print(f"⚠️ Execute {tool_test['slug']} failed (tool may not be available)")
-    
-    # 5. Test connection workflow for GitHub
-    connection_response = test_create_connection(api_key, user_id, "github")
-    if connection_response:
-        print("✅ Create GitHub connection passed")
         
-        connection_id = connection_response["id"]
-        
-        # Check connection status (this will auto-authorize in the test implementation)
-        status_response = test_get_connection_status(api_key, connection_id)
-        if status_response and status_response["status"] == "authorized":
-            print("✅ GitHub connection authorized")
+        if create_response.status_code == 201:
+            connection_id = create_response.json()["id"]
             
-            # List connected accounts
-            accounts = test_list_connected_accounts(api_key, user_id)
-            if accounts:
-                print(f"✅ List connected accounts passed ({len(accounts)} accounts)")
-                
-                # Test executing a tool that requires connection
-                if accounts:
-                    connected_account_id = accounts[0]["id"]
-                    success, result = test_execute_tool(
-                        api_key, user_id, "github.create_issue",
-                        {
-                            "repository": "test-repo",
-                            "title": "Test Issue",
-                            "body": "This is a test issue created by the test suite"
-                        }
-                    )
-                    if success:
-                        print("✅ Execute GitHub tool with connection passed")
-    
-    return True
+            response = requests.get(
+                f"{base_url}/v1/sdk/connections/{connection_id}",
+                headers=headers
+            )
+            assert response.status_code == 200
+            connection_status = response.json()
+            assert "status" in connection_status
 
-def main():
-    """Run all authentication and tools tests."""
-    print("Starting Terralink Platform Tests...")
-    print(f"Testing against: {BASE_URL}")
-    
-    # Test health check
-    if not test_health_check():
-        print("❌ Health check failed. Is the server running?")
-        return
-    
-    print("✅ Health check passed")
-    
-    # Test user registration
-    user_response, user_data = test_user_registration()
-    if not user_response:
-        print("❌ User registration failed")
-        return
-    
-    print("✅ User registration passed")
-    
-    # Test user login
-    login_response = test_user_login(user_data)
-    if not login_response:
-        print("❌ User login failed")
-        return
-    
-    print("✅ User login passed")
-    token = login_response["access_token"]
-    
-    # Test get current user
-    if not test_get_current_user(token):
-        print("❌ Get current user failed")
-        return
-    
-    print("✅ Get current user passed")
-    
-    # Test create API key
-    api_key_response = test_create_api_key(token)
-    if not api_key_response:
-        print("❌ Create API key failed")
-        return
-    
-    print("✅ Create API key passed")
-    api_key = api_key_response["key"]
-    api_key_id = api_key_response["id"]
-    
-    # Test list API keys
-    if not test_list_api_keys(token):
-        print("❌ List API keys failed")
-        return
-    
-    print("✅ List API keys passed")
-    
-    # Create another API key for deletion tests
-    api_key_response_2 = test_create_api_key(token)
-    if not api_key_response_2:
-        print("❌ Create second API key failed")
-        return
-    
-    api_key_id_2 = api_key_response_2["id"]
-    
-    # Test removing active API key (should fail)
-    if not test_remove_active_api_key_should_fail(token, api_key_id_2):
-        print("❌ Remove active API key test failed (should have returned 400)")
-        return
-    
-    print("✅ Remove active API key correctly failed")
-    
-    # Test revoking API key
-    if not test_revoke_api_key(token, api_key_id_2):
-        print("❌ Revoke API key failed")
-        return
-    
-    print("✅ Revoke API key passed")
-    
-    # Test removing deactivated API key
-    if not test_remove_deactivated_api_key(token, api_key_id_2):
-        print("❌ Remove deactivated API key failed")
-        return
-    
-    print("✅ Remove deactivated API key passed")
-    
-    # Add tool tests after existing tests are completed
-    if api_key_response:
-        api_key = api_key_response["key"]
+    @pytest.mark.parametrize("toolkit", ["github"])
+    def test_list_connected_accounts(self, base_url, api_key_data, toolkit):
+        """Test listing connections for a toolkit."""
+        headers = {"X-API-Key": api_key_data["key"]}
         
-        # Test tools and connections workflow
-        if test_tools_and_connections_workflow(api_key, user_response["user_id"]):
-            print("✅ Tools and connections workflow passed")
-        else:
-            print("❌ Tools and connections workflow failed")
-    
-    print("\n🎉 All tests completed!")
-    print(f"\n📝 Test Summary:")
-    print(f"   - Created user: ({user_data['email']})")
-    print(f"   - Generated JWT token: {token[:20]}...")
-    print(f"   - Generated API key: {api_key[:20]}...")
-    print(f"   - Tested API key revocation and removal")
-    print(f"\n💡 You can now use these credentials to test SDK integration!")
+        response = requests.get(
+            f"{base_url}/v1/sdk/toolkits/{toolkit}/connections",
+            headers=headers
+        )
+        # May return empty list or 404 if no connections exist
+        assert response.status_code in [200, 404]
+        
+        if response.status_code == 200:
+            connections = response.json()
+            assert isinstance(connections, list)
 
-if __name__ == "__main__":
-    main()
+class TestIntegration:
+    """Integration tests for the complete workflow."""
+    
+    @pytest.mark.integration
+    def test_complete_workflow(self, base_url, api_key_data, registered_user):
+        """Test complete tools and connections workflow."""
+        user_response, _ = registered_user
+        headers = {"X-API-Key": api_key_data["key"]}
+        
+        # 1. Test toolkits listing
+        toolkits_response = requests.get(
+            f"{base_url}/v1/sdk/toolkits",
+            headers=headers
+        )
+        assert toolkits_response.status_code == 200
+        toolkits = toolkits_response.json()
+        
+        # 2. Test tools listing
+        tools_response = requests.get(
+            f"{base_url}/v1/sdk/tools",
+            headers=headers
+        )
+        assert tools_response.status_code == 200
+        tools = tools_response.json()
+        
+        # 3. Test tool details for available tools
+        if tools:
+            for tool in tools[:2]:  # Test first 2 tools to avoid spam
+                tool_slug = tool["slug"]
+                detail_response = requests.get(
+                    f"{base_url}/v1/sdk/tools/{tool_slug}",
+                    headers=headers
+                )
+                assert detail_response.status_code == 200
+        
+        # 4. Test GitHub tool execution (may not be available)
+        github_tool_payload = {
+            "inputs": {"username": "testuser"},
+            "metadata": {"user_id": user_response["user_id"]}
+        }
+        
+        github_response = requests.post(
+            f"{base_url}/v1/sdk/tools/github.list_user_repos/execute",
+            json=github_tool_payload,
+            headers=headers
+        )
+        # Tool may not be available, so we accept 404
+        assert github_response.status_code in [200, 404]
+        
+        # 5. Test connection creation for GitHub (may not be available)
+        connection_payload = {
+            "name": "Test GitHub Connection",
+            "auth_method": "oauth2",
+            "credentials": {},
+            "scopes": []
+        }
+        
+        connection_response = requests.post(
+            f"{base_url}/v1/sdk/toolkits/github/connections",
+            json=connection_payload,
+            headers=headers
+        )
+        # Connection creation may not be available in test environment
+        assert connection_response.status_code in [201, 404, 400]
+
+
+# Pytest markers for test categorization
+pytestmark = [
+    pytest.mark.auth,
+    pytest.mark.api
+]

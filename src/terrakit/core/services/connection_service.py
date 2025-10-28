@@ -342,11 +342,11 @@ class ConnectionService:
     def cleanup_expired_oauth_states(db: Session) -> int:
         """Clean up expired OAuth states."""
         expired_count = db.query(OAuthState).filter(
-            OAuthState.expires_at <= datetime.utcnow()
+            OAuthState.expires_at <= datetime.now(datetime.UTC)
         ).count()
         
         db.query(OAuthState).filter(
-            OAuthState.expires_at <= datetime.utcnow()
+            OAuthState.expires_at <= datetime.now(datetime.UTC)
         ).delete()
         
         db.commit()

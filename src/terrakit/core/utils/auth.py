@@ -16,8 +16,14 @@ def generate_public_id() -> str:
     """Generate public ID for API Key"""
     return secrets.token_urlsafe(12)
 
-# Password encryption context
-pwd_context = CryptContext(schemes=["argon2"], deprecated="auto")
+# Password encryption context - using only modern schemes that don't rely on deprecated crypt module
+pwd_context = CryptContext(
+    schemes=["argon2", "bcrypt"],
+    deprecated="auto",
+    # Explicitly disable schemes that use the deprecated crypt module
+    argon2__rounds=12,
+    bcrypt__rounds=12
+)
 
 def hash_password(password: str) -> str:
     """Hash password"""

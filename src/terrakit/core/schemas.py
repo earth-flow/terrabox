@@ -1,6 +1,6 @@
 """API request and response schemas."""
 from typing import List, Optional, Dict, Any, Union
-from pydantic import BaseModel, Field, UUID4
+from pydantic import BaseModel, Field, UUID4, ConfigDict
 from datetime import datetime
 from enum import Enum
 
@@ -8,13 +8,12 @@ from enum import Enum
 # OAuth-related schemas
 class OAuthUserInfo(BaseModel):
     """OAuth user information model"""
+    model_config = ConfigDict(from_attributes=True)
+    
     oauth_user_id: str
     email: str
     display_name: str
     avatar_url: Optional[str] = None
-
-    class Config:
-        from_attributes = True
 
 
 # User-related schemas
@@ -32,15 +31,14 @@ class UserLogin(BaseModel):
 
 class UserResponse(BaseModel):
     """User response model"""
+    model_config = ConfigDict(from_attributes=True)
+    
     id: str
     user_id: str
     email: str
     is_active: bool
     created_at: datetime
     api_key: Optional[str] = None  # Only returned once during registration
-
-    class Config:
-        from_attributes = True
 
     @classmethod
     def from_orm(cls, obj):
@@ -80,14 +78,13 @@ class ApiKeyResponse(BaseModel):
 
 class OAuthProviderResponse(BaseModel):
     """OAuth provider response model"""
+    model_config = ConfigDict(from_attributes=True)
+    
     name: str
     display_name: str
     auth_url: str
     scopes: Optional[str] = None
     is_active: bool = True
-
-    class Config:
-        from_attributes = True
 
     @classmethod
     def from_orm(cls, obj):
@@ -138,6 +135,8 @@ class UserOAuthAccountResponse(BaseModel):
 # Tool-related schemas
 class ToolSpecOut(BaseModel):
     """Tool specification output model"""
+    model_config = ConfigDict(from_attributes=True)
+    
     slug: str
     name: str
     description: str
@@ -147,21 +146,17 @@ class ToolSpecOut(BaseModel):
     parameters: Optional[Dict[str, Any]] = None
     metadata: Optional[Dict[str, Any]] = None
 
-    class Config:
-        from_attributes = True
-
 
 class ToolkitOut(BaseModel):
-    """Toolkit output schema."""
+    """Toolkit output model"""
+    model_config = ConfigDict(from_attributes=True)
+    
     slug: str
     name: str
     description: str
     status: str = "active"  # active, inactive, connected, available
     tools: List[ToolSpecOut] = []
     metadata: Optional[Dict[str, Any]] = None
-
-    class Config:
-        from_attributes = True
 
 
 class ExecuteRequestIn(BaseModel):
@@ -183,7 +178,9 @@ class ExecuteResponseOut(BaseModel):
 
 # Connection-related schemas
 class ConnectionStatusOut(BaseModel):
-    """Connection status output schema."""
+    """Connection status output model"""
+    model_config = ConfigDict(from_attributes=True)
+    
     connection_id: str
     toolkit_slug: str
     status: str  # pending, connected, failed
@@ -191,18 +188,14 @@ class ConnectionStatusOut(BaseModel):
     created_at: datetime
     updated_at: datetime
 
-    class Config:
-        from_attributes = True
-
 
 # Pagination schemas
 class PaginationParams(BaseModel):
-    """Pagination parameters."""
+    """Pagination parameters"""
+    model_config = ConfigDict(validate_assignment=True)
+    
     page: int = 1
     size: int = 20
-    
-    class Config:
-        validate_assignment = True
 
 
 class PaginatedResponse(BaseModel):
@@ -314,6 +307,8 @@ class ConnectionOAuth2StartResponse(BaseModel):
 
 class ConnectionResponse(BaseModel):
     """Connection response schema (masked)."""
+    model_config = ConfigDict(from_attributes=True)
+    
     id: str
     user_id: str
     toolkit_id: int
@@ -332,9 +327,6 @@ class ConnectionResponse(BaseModel):
     mcp_protocol_version: Optional[str] = None
     created_at: datetime
     updated_at: datetime
-
-    class Config:
-        from_attributes = True
     
     @classmethod
     def from_orm(cls, obj):
@@ -402,7 +394,9 @@ class ToolOverrideRequest(BaseModel):
 
 
 class ToolOverrideResponse(BaseModel):
-    """Tool override response."""
+    """Tool override response model"""
+    model_config = ConfigDict(from_attributes=True)
+    
     id: int
     connection_id: str
     tool_key: str
@@ -411,9 +405,6 @@ class ToolOverrideResponse(BaseModel):
     tool_version: Optional[str] = None
     resolved_digest: Optional[str] = None
     is_stale: bool
-
-    class Config:
-        from_attributes = True
 
 
 class EffectiveToolResponse(BaseModel):
@@ -440,7 +431,9 @@ class EffectiveToolsResponse(BaseModel):
 
 # App and Tool Registry Schemas
 class ToolkitResponse(BaseModel):
-    """Response model for toolkit data."""
+    """Toolkit response model"""
+    model_config = ConfigDict(from_attributes=True)
+    
     id: int
     key: str
     name: str
@@ -449,9 +442,6 @@ class ToolkitResponse(BaseModel):
     is_active: bool
     created_at: datetime
     updated_at: datetime
-
-    class Config:
-        from_attributes = True
 
 
 class ToolDefinitionResponse(BaseModel):
@@ -480,6 +470,8 @@ class MCPManifestResponse(BaseModel):
 # Analytics-related schemas
 class ToolExecutionResponse(BaseModel):
     """Tool execution record response schema."""
+    model_config = ConfigDict(from_attributes=True)
+    
     id: int
     user_id: str
     tool_slug: str
@@ -493,9 +485,6 @@ class ToolExecutionResponse(BaseModel):
     output_size: Optional[int] = None
     cost_estimate: Optional[float] = None
     meta: Optional[Dict[str, Any]] = None
-
-    class Config:
-        from_attributes = True
     
     @classmethod
     def from_orm(cls, obj):

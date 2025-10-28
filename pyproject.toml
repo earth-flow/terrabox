@@ -31,3 +31,14 @@ dev = [
 
 [tool.setuptools]
 package-dir = {"" = "src"}
+
+[tool.pytest.ini_options]
+filterwarnings = [
+    "ignore:'crypt' is deprecated and slated for removal in Python 3.13:DeprecationWarning:passlib.utils",
+]
+markers = [
+    "auth: marks tests as authentication related",
+    "api: marks tests as API related", 
+    "integration: marks tests as integration tests",
+    "workflow: marks tests as workflow tests",
+]

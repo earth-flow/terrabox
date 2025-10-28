@@ -124,8 +124,8 @@ def make_analytics_router(config: RouterConfig) -> APIRouter:
         start_date: Optional[datetime] = Query(None, description="Filter stats after this date"),
         end_date: Optional[datetime] = Query(None, description="Filter stats before this date"),
         min_executions: Optional[int] = Query(None, ge=0, description="Minimum number of executions"),
-        sort_by: str = Query("total_executions", regex="^(total_executions|unique_users|success_rate|total_cost|last_used_at)$"),
-        sort_order: str = Query("desc", regex="^(asc|desc)$"),
+        sort_by: str = Query("total_executions", pattern="^(total_executions|unique_users|success_rate|total_cost|last_used_at)$"),
+        sort_order: str = Query("desc", pattern="^(asc|desc)$"),
         current_user: UserResponse = Depends(config.current_user_dep),
         db: Session = Depends(get_db)
     ):

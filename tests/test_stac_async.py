@@ -8,7 +8,7 @@ import sys
 
 # 服务器配置
 BASE_URL = "http://127.0.0.1:8000"
-API_KEY = "tlk_live_DnG-iRaL5iPOa0emw5sF0Nu9O5bG3CSVDw7ivp5y-3Q"
+API_KEY = "tlk_live_jHZt0Rw5tt6My8VkCnn95zGKttm9RITOAv74rFfrOpY"
 AUTH_HEADERS = {"X-API-Key": API_KEY}
 
 def test_stac_search_fixed():

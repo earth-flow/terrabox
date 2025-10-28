@@ -180,7 +180,7 @@ class BackgroundTaskManager:
         db = next(get_db())
         try:
             # Find connections expiring in the next 10 minutes
-            expiry_threshold = datetime.utcnow() + timedelta(minutes=10)
+            expiry_threshold = datetime.now(datetime.UTC) + timedelta(minutes=10)
             
             expiring_connections = db.query(Connection).filter(
                 and_(
