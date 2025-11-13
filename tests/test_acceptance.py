@@ -163,18 +163,32 @@ def test_batch_api_multiple_actions(api_client):
 
 def test_async_sync_support(api_client):
     """验证同时支持 async 与 sync 工具（sync 不阻塞事件循环）"""
-    # 测试混合 math_add 和 echo 工具
+    piston_action_obj1 = {"language": "python", "files": [{"name": "main.py", "content": "print(2**5+145)"}]}
+    piston_action_obj2 = {"language": "python", "files": [{"name": "main.py", "content": "print('ok hahahahah')"}]}
+    piston_action_obj3 = {"language": "python", "files": [{"name": "main.py", "content": "print('Hello world')"}]}
+    piston_action_str1 = json.dumps({"action": json.dumps(piston_action_obj1)})
+    piston_action_str2 = json.dumps({"action": json.dumps(piston_action_obj2)})
+    piston_action_str3 = json.dumps({"action": json.dumps(piston_action_obj3)})
     test_data = {
-        "trajectory_ids": ["async_1", "sync_1", "async_2"],
+        "trajectory_ids": [
+            "async_1", "sync_1", "async_2",
+            "async_piston_1", "async_piston_2", "async_piston_3"
+        ],
         "actions": [
             '{"a": 1, "b": 2}',
             '{"message": "sync test"}',
-            '{"a": 3, "b": 4}'
+            '{"a": 3, "b": 4}',
+            piston_action_str1,
+            piston_action_str2,
+            piston_action_str3,
         ],
         "extra_fields": [
             {"tool": "example.math_add"},
             {"tool": "example.echo"},
-            {"tool": "example.math_add"}
+            {"tool": "example.math_add"},
+            {"tool": "piston.execute"},
+            {"tool": "piston.execute"},
+            {"tool": "piston.execute"}
         ],
         "user_id": "test_user"
     }
@@ -195,22 +209,60 @@ def test_async_sync_support(api_client):
     data = response.json()
     observations = data.get('observations', [])
     
-    # 验证返回的观察数量
-    assert len(observations) == 3, f"期望返回3个观察结果，实际返回{len(observations)}个"
+    assert len(observations) == 6, f"期望返回6个观察结果，实际返回{len(observations)}个"
     
     # 验证混合工具的结果
-    expected_results = [3.0, "sync test", 7.0]  # 1+2, echo, 3+4
-    for i, obs in enumerate(observations):
+    expected_results = [3.0, "sync test", 7.0]
+    for i, obs in enumerate(observations[:3]):
         if isinstance(obs, dict):
-            # 根据工具类型提取相应字段
-            if i == 1:  # echo工具
+            if i == 1:
                 actual_result = obs.get('echo', obs)
-            else:  # math_add工具
+            else:
                 actual_result = obs.get('result', obs)
             assert actual_result == expected_results[i], f"结果{i+1}错误，期望{expected_results[i]}，实际得到{actual_result}"
         else:
-            # 如果返回的是简单值
             assert obs == expected_results[i], f"结果{i+1}错误，期望{expected_results[i]}，实际得到{obs}"
+
+    for j in range(3, 6):
+        piston_obs = observations[j]
+        if isinstance(piston_obs, dict):
+            piston_result = piston_obs.get('result') or piston_obs.get('error') or piston_obs
+            assert isinstance(piston_result, str) and len(piston_result) > 0, "piston结果格式不正确"
+        else:
+            assert isinstance(piston_obs, str) and len(piston_obs) > 0, "piston结果格式不正确"
+
+    # 追加：测试 bash.execute 和 ipython.execute
+    bash_action = json.dumps({"commands": "echo hello && echo 123"})
+    ipy_action = json.dumps({"action": "<python>print('ipython ok')</python>"})
+    test_data2 = {
+        "trajectory_ids": ["bash_1", "ipy_1"],
+        "actions": [bash_action, ipy_action],
+        "extra_fields": [{"tool": "bash.execute"}, {"tool": "ipython.execute"}],
+        "user_id": "test_user"
+    }
+    response2 = requests.post(
+        f"{api_client['base_url']}/v1/tools/get_observation",
+        json=test_data2,
+        headers=api_client['headers']
+    )
+    assert response2.status_code == 200, f"API请求失败: {response2.text}"
+    data2 = response2.json()
+    obs2 = data2.get('observations', [])
+    assert len(obs2) == 2, f"期望返回2个观察结果，实际返回{len(obs2)}个"
+    # bash 输出应包含 hello 和 123
+    bash_obs = obs2[0]
+    if isinstance(bash_obs, dict):
+        bash_output = bash_obs.get('output') or bash_obs.get('observation') or str(bash_obs)
+    else:
+        bash_output = str(bash_obs)
+    assert "hello" in bash_output and "123" in bash_output, "bash输出不包含预期内容"
+    # ipython 输出应包含 ipython ok
+    ipy_obs = obs2[1]
+    if isinstance(ipy_obs, dict):
+        ipy_output = ipy_obs.get('observation') or ipy_obs.get('execution_result') or str(ipy_obs)
+    else:
+        ipy_output = str(ipy_obs)
+    assert "ipython ok" in ipy_output, "ipython输出不包含预期内容"
     
     # 验证处理时间合理
     assert processing_time < 5.0, f"处理时间过长: {processing_time:.3f}s"

@@ -1,6 +1,6 @@
 """Connection service for managing connections and OAuth flows."""
 import secrets
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import List, Optional, Dict, Any
 from sqlalchemy.orm import Session
 from fastapi import HTTPException, status
@@ -342,11 +342,11 @@ class ConnectionService:
     def cleanup_expired_oauth_states(db: Session) -> int:
         """Clean up expired OAuth states."""
         expired_count = db.query(OAuthState).filter(
-            OAuthState.expires_at <= datetime.now(datetime.UTC)
+            OAuthState.expires_at <= datetime.now(timezone.utc)
         ).count()
         
         db.query(OAuthState).filter(
-            OAuthState.expires_at <= datetime.now(datetime.UTC)
+            OAuthState.expires_at <= datetime.now(timezone.utc)
         ).delete()
         
         db.commit()

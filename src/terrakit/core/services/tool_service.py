@@ -234,17 +234,16 @@ class ToolService:
             accepts_connection = len(sig.parameters) >= 3
             
             if inspect.iscoroutinefunction(handler):
-                # Async handler
                 if accepts_connection:
                     result_data = await handler(request.inputs or {}, context, connection)
                 else:
                     result_data = await handler(request.inputs or {}, context)
             else:
-                # Sync handler
+                loop = asyncio.get_running_loop()
                 if accepts_connection:
-                    result_data = handler(request.inputs or {}, context, connection)
+                    result_data = await loop.run_in_executor(None, lambda: handler(request.inputs or {}, context, connection))
                 else:
-                    result_data = handler(request.inputs or {}, context)
+                    result_data = await loop.run_in_executor(None, lambda: handler(request.inputs or {}, context))
             
             # Record tool execution
             execution_id = str(uuid.uuid4())
