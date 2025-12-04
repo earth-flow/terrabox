@@ -1,5 +1,6 @@
 """Routes for toolkits and tool execution."""
 
+from typing import List, Dict, Any
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
@@ -37,6 +38,20 @@ async def _execute_tool(db: Session, user_id: str, slug: str, request: ExecuteRe
     return await ToolService.execute_tool(db, user_id, slug, request)
 
 
+def _resolve_slug(slug: str, db: Session, user_id: str) -> str:
+    """Resolve a potentially underscored slug (from LLM) back to a dotted slug."""
+    if "." in slug:
+        return slug
+    
+    # Get all tools to find a match
+    tools = _get_tools_with_status(db, user_id)
+    for tool in tools:
+        if tool.slug.replace(".", "_") == slug:
+            return tool.slug
+            
+    return slug
+
+
 # =============================================================================
 # Router Factory Implementation
 # =============================================================================
@@ -64,6 +79,72 @@ def make_tools_router(config: RouterConfig) -> APIRouter:
         """Get all tools with their availability status."""
         return _get_tools_with_status(db, current_user.user_id)
 
+    @router.get("/tools/definitions/openai", response_model=List[Dict[str, Any]])
+    def get_tools_openai_format(
+        toolkit: str | None = None,
+        current_user: m.User = Depends(config.current_user_dep),
+        db: Session = Depends(get_db)
+    ):
+        """Get tools in OpenAI function calling format."""
+        tools = _get_tools_with_status(db, current_user.user_id)
+        if toolkit:
+            tools = [t for t in tools if t.toolkit_slug == toolkit]
+            
+        openai_tools = []
+        for tool in tools:
+            if tool.status != "available": continue
+            openai_tools.append({
+                "type": "function",
+                "function": {
+                    "name": tool.slug.replace(".", "_"),
+                    "description": tool.description,
+                    "parameters": tool.parameters or {"type": "object", "properties": {}}
+                }
+            })
+        return openai_tools
+
+    @router.get("/tools/definitions/anthropic", response_model=List[Dict[str, Any]])
+    def get_tools_anthropic_format(
+        toolkit: str | None = None,
+        current_user: m.User = Depends(config.current_user_dep),
+        db: Session = Depends(get_db)
+    ):
+        """Get tools in Anthropic tool use format."""
+        tools = _get_tools_with_status(db, current_user.user_id)
+        if toolkit:
+            tools = [t for t in tools if t.toolkit_slug == toolkit]
+            
+        anthropic_tools = []
+        for tool in tools:
+            if tool.status != "available": continue
+            anthropic_tools.append({
+                "name": tool.slug.replace(".", "_"),
+                "description": tool.description,
+                "input_schema": tool.parameters or {"type": "object", "properties": {}}
+            })
+        return anthropic_tools
+
+    @router.get("/tools/definitions/gemini", response_model=List[Dict[str, Any]])
+    def get_tools_gemini_format(
+        toolkit: str | None = None,
+        current_user: m.User = Depends(config.current_user_dep),
+        db: Session = Depends(get_db)
+    ):
+        """Get tools in Google Gemini format."""
+        tools = _get_tools_with_status(db, current_user.user_id)
+        if toolkit:
+            tools = [t for t in tools if t.toolkit_slug == toolkit]
+            
+        funcs = []
+        for tool in tools:
+            if tool.status != "available": continue
+            funcs.append({
+                "name": tool.slug.replace(".", "_"),
+                "description": tool.description,
+                "parameters": tool.parameters or {"type": "object", "properties": {}}
+            })
+        return [{"function_declarations": funcs}]
+
     @router.get("/tools/{slug}", response_model=ToolSpecOut)
     def get_tool_detail(
         slug: str,
@@ -89,7 +170,8 @@ def make_tools_router(config: RouterConfig) -> APIRouter:
         db: Session = Depends(get_db)
     ):
         """Execute a tool."""
-        return await _execute_tool(db, current_user.user_id, slug, request)
+        real_slug = _resolve_slug(slug, db, current_user.user_id)
+        return await _execute_tool(db, current_user.user_id, real_slug, request)
     
     return router
 

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 from contextlib import asynccontextmanager
 
@@ -16,6 +16,10 @@ from .routers import connections as connections_router
 from .routers import analytics as analytics_router
 from .routers import async_tools as async_tools_router
 from .core.background_tasks import start_background_tasks, stop_background_tasks
+
+# MCP Integration
+from mcp.server.sse import SseServerTransport
+from .core.mcp_server import mcp_instance
 
 def init_db():
     """Initialize database tables.
@@ -86,7 +90,18 @@ def create_app() -> FastAPI:
     app.include_router(async_tools_router.gui_router)     # GUI async tools
     app.include_router(async_tools_router.batch_tools_router)  # Legacy batch tools (backward compatibility)
     
-    return app
+    # MCP Server Integration (SSE)
+    sse = SseServerTransport("/mcp/messages")
 
+    @app.get("/mcp/sse")
+    async def handle_sse(request: Request):
+        async with sse.connect_sse(request.scope, request.receive, request._send) as streams:
+            await mcp_instance.server.run(streams[0], streams[1], mcp_instance.server.create_initialization_options())
+
+    @app.post("/mcp/messages")
+    async def handle_messages(request: Request):
+        await sse.handle_post_message(request.scope, request.receive, request._send)
+
+    return app
 
 app = create_app()
