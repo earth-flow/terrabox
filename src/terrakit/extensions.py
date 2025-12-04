@@ -14,7 +14,7 @@ from importlib.metadata import entry_points
 from pathlib import Path
 from typing import Callable, Optional
 
-from .data import register_tool, register_toolkit, get_handler as _get_handler
+from .core.runtime_registry import register_tool, register_toolkit, get_handler as _get_handler
 from .core.tool_registry import ToolSpec, ToolDefinition as Toolkit
 
 logger = logging.getLogger(__name__)

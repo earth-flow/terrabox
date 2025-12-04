@@ -18,7 +18,7 @@ import re
 from typing import Any, Dict, List, Optional, Tuple, Union
 from sqlalchemy.orm import Session
 
-from ...data import get_handler, list_toolkits, list_tools  # 项目已有的工具获取函数
+from ..runtime_registry import get_handler, list_toolkits, list_tools  # 项目已有的工具获取函数
 from .async_tool_config import AsyncToolServerConfig
 
 logger = logging.getLogger(__name__)

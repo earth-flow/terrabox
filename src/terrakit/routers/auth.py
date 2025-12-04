@@ -26,7 +26,7 @@ from ..core.utils.auth import (
 )
 from ..core.security import DataMasking
 from ..core.services import AuthService
-from ..core.oauth_service import OAuthService
+from ..core.services.oauth_service import OAuthService
 from ..core.utils.config import settings
 from .deps import current_user_from_api_key, current_user_from_jwt
 from ..core.utils.rate_limit import auth_rate_limiter

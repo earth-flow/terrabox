@@ -6,7 +6,7 @@ Thread-safe, tiny, in-memory.
 from __future__ import annotations 
 from typing import Callable, Dict, List, Optional 
 from threading import RLock 
-from .core.tool_registry import ToolSpec, Toolkit  # Pydantic API schemas 
+from .tool_registry import ToolSpec, Toolkit  # Pydantic API schemas 
 
 # handler shape: handler(arguments: dict, context: dict, connected_account_or_none) -> dict 
 ExecuteHandler = Callable[[dict, dict, object | None], dict] 

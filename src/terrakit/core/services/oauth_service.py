@@ -18,10 +18,10 @@ import httpx
 from sqlalchemy.orm import Session
 from fastapi import HTTPException, status
 
-from ..db import models as m
-from .schemas import OAuthUserInfo
-from .security import encrypt_credentials, decrypt_credentials
-from .utils.config import settings
+from ...db import models as m
+from ..schemas import OAuthUserInfo
+from ..security import encrypt_credentials, decrypt_credentials
+from ..utils.config import settings
 
 
 class OAuthService:

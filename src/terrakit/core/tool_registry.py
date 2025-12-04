@@ -81,7 +81,7 @@ class ToolRegistry:
     
     def get_tool(self, tool_key: str) -> Optional[ToolDefinition]:
         """Get a tool definition by key from the extensions system."""
-        from ..data import get_tool
+        from .runtime_registry import get_tool
         tool_spec = get_tool(tool_key)
         if tool_spec:
             return ToolDefinition.from_tool_spec(tool_spec)
@@ -89,7 +89,7 @@ class ToolRegistry:
     
     def list_tools(self, app_key: Optional[str] = None) -> List[ToolDefinition]:
         """List all tool definitions from the extensions system."""
-        from ..data import list_tools
+        from .runtime_registry import list_tools
         tool_specs = list_tools()
         tool_defs = [ToolDefinition.from_tool_spec(spec) for spec in tool_specs]
         
