@@ -47,7 +47,7 @@ class ToolOverrideService:
         orphan_overrides = []
         
         for tool_def in tool_defs:
-            override = override_map.get(tool_def.tool_key)
+            override = override_map.get(tool_def.slug)
             
             # Calculate effective enabled state
             enabled = ToolOverrideService._calculate_enabled(
@@ -60,26 +60,23 @@ class ToolOverrideService:
             
             # Merge configuration
             config = ToolOverrideService._merge_config(
-                tool_def.default_config or {}, 
+                tool_def.parameters or {}, 
                 override.config if override else {}
             )
             
             # Check if override is stale
-            is_stale = bool(
-                override and 
-                override.resolved_digest and 
-                override.resolved_digest != tool_def.digest
-            )
+            # ToolSpec does not have digest attribute, so we skip digest check for now
+            is_stale = False
             
             effective_tool = {
-                "tool_key": tool_def.tool_key,
+                "tool_key": tool_def.slug,
                 "name": tool_def.name,
                 "description": tool_def.description,
-                "input_schema": tool_def.input_schema,
+                "input_schema": tool_def.parameters,
                 "enabled": enabled,
                 "config": config,
                 "version": getattr(tool_def, 'version', None),
-                "digest": tool_def.digest,
+                "digest": None,
                 "is_stale": is_stale,
                 "required_scopes": tool_def.required_scopes
             }
@@ -87,7 +84,7 @@ class ToolOverrideService:
             effective_tools.append(effective_tool)
         
         # Find orphan overrides (overrides without corresponding tool definitions)
-        tool_keys = {tool_def.tool_key for tool_def in tool_defs}
+        tool_keys = {tool_def.slug for tool_def in tool_defs}
         for override in overrides:
             if override.tool_key not in tool_keys:
                 orphan_overrides.append({
@@ -200,15 +197,16 @@ class ToolOverrideService:
     
     @staticmethod
     def _calculate_enabled(
-        tool_def: ToolDefinition,
+        tool_def: Any,
         override: Optional[ToolOverride],
         connection: DBConnection
     ) -> bool:
         """Calculate effective enabled state for a tool."""
         # Start with override or default
+        default_enabled = getattr(tool_def, 'default_enabled', True)
         enabled = (
             override.enabled if override and override.enabled is not None 
-            else tool_def.default_enabled
+            else default_enabled
         )
         
         # Must be connection enabled and valid
@@ -245,7 +243,7 @@ class ToolOverrideService:
     
     @staticmethod
     def _validate_config(
-        tool_def: ToolDefinition,
+        tool_def: Any,
         config: Dict[str, Any]
     ) -> None:
         """Validate config against tool's input schema."""

@@ -1,12 +1,12 @@
 """
-异步工具服务 - 纯服务层
+Async Tool Service - Pure Service Layer
 
-提供批量工具执行的核心业务逻辑，支持：
-- 批量并发执行
-- 智能缓存（LRU + TTL）
-- 完整日志追踪
-- 连接管理
-- 性能监控
+Provides core business logic for batch tool execution, supporting:
+- Batch concurrent execution
+- Smart caching (LRU + TTL)
+- Complete log tracing
+- Connection management
+- Performance monitoring
 """
 
 import asyncio
@@ -26,14 +26,14 @@ from ...db.session import SessionLocal
 
 logger = logging.getLogger(__name__)
 
-# 全局配置和管理器实例
+# Global config and manager instance
 _config = AsyncToolServerConfig()
 _manager: Optional[AsyncToolManager] = None
 _semaphore: Optional[asyncio.Semaphore] = None
 
-# LRU 缓存（带 TTL）
+# LRU Cache (with TTL)
 class CacheEntry:
-    """缓存条目，包含数据和过期时间"""
+    """Cache entry, containing data and expiration time"""
     def __init__(self, data: Any, ttl: int):
         self.data = data
         self.expires_at = time.time() + ttl
@@ -41,37 +41,37 @@ class CacheEntry:
     def is_expired(self) -> bool:
         return time.time() > self.expires_at
 
-# 使用 LRU 缓存替代 WeakValueDictionary
+# Use LRU cache instead of WeakValueDictionary
 @lru_cache(maxsize=None)
 def _get_cache():
-    """获取缓存实例（延迟初始化）"""
+    """Get cache instance (lazy initialization)"""
     return {}
 
 def _get_from_cache(key: str) -> Optional[Any]:
-    """从缓存获取数据"""
+    """Get data from cache"""
     cache = _get_cache()
     entry = cache.get(key)
     if entry and not entry.is_expired():
         return entry.data
     elif entry:
-        # 清理过期条目
+        # Clean up expired entry
         cache.pop(key, None)
     return None
 
 def _set_to_cache(key: str, data: Any):
-    """设置缓存数据"""
+    """Set cache data"""
     if not _config.hash_requests:
         return
     
     cache = _get_cache()
     
-    # 清理过期条目（简单策略）
+    # Clean up expired entries (simple strategy)
     if len(cache) > _config.cache_max_size:
         expired_keys = [k for k, v in cache.items() if v.is_expired()]
         for k in expired_keys:
             cache.pop(k, None)
         
-        # 如果还是太多，清理最老的条目
+        # If still too many, remove oldest entries
         if len(cache) > _config.cache_max_size:
             oldest_keys = sorted(cache.keys())[:len(cache) - _config.cache_max_size + 100]
             for k in oldest_keys:
@@ -81,32 +81,32 @@ def _set_to_cache(key: str, data: Any):
 
 
 class ActionRequest(BaseModel):
-    """批量动作请求体"""
-    trajectory_ids: List[str] = Field(..., description="轨迹ID列表")
-    actions: List[str] = Field(..., description="动作字符串列表")
-    extra_fields: List[Dict[str, Any]] = Field(default_factory=list, description="额外字段列表")
-    user_id: Optional[str] = Field(None, description="用户ID（用于连接管理）")
-    trace_id: Optional[str] = Field(None, description="追踪ID（用于日志）")
+    """Batch action request body"""
+    trajectory_ids: List[str] = Field(..., description="List of trajectory IDs")
+    actions: List[str] = Field(..., description="List of action strings")
+    extra_fields: List[Dict[str, Any]] = Field(default_factory=list, description="List of extra fields")
+    user_id: Optional[str] = Field(None, description="User ID (for connection management)")
+    trace_id: Optional[str] = Field(None, description="Trace ID (for logging)")
 
 
 class AgentResponse(BaseModel):
-    """批量动作响应体"""
-    observations: List[Any] = Field(..., description="观察结果列表")
-    dones: List[bool] = Field(..., description="完成状态列表")
-    valids: List[bool] = Field(..., description="有效性状态列表")
-    trace_id: str = Field(..., description="追踪ID")
-    processing_time_ms: float = Field(..., description="处理时间（毫秒）")
+    """Batch action response body"""
+    observations: List[Any] = Field(..., description="List of observations")
+    dones: List[bool] = Field(..., description="List of completion statuses")
+    valids: List[bool] = Field(..., description="List of validity statuses")
+    trace_id: str = Field(..., description="Trace ID")
+    processing_time_ms: float = Field(..., description="Processing time (ms)")
 
 
 class AsyncToolsService:
-    """异步工具服务类 - 处理批量工具执行的核心业务逻辑"""
+    """Async Tools Service Class - Handles core business logic for batch tool execution"""
     
     def __init__(self, db: Session):
         self.db = db
         self._ensure_manager_and_semaphore()
     
     def _ensure_manager_and_semaphore(self):
-        """确保管理器和信号量已初始化"""
+        """Ensure manager and semaphore are initialized"""
         global _manager, _semaphore
         
         if _manager is None:
@@ -116,15 +116,15 @@ class AsyncToolsService:
             _semaphore = asyncio.Semaphore(_config.max_concurrent_requests)
     
     def _hash_req(self, req: ActionRequest) -> str:
-        """生成请求哈希（用于缓存）"""
-        # 创建请求的标准化表示
+        """Generate request hash (for caching)"""
+        # Create normalized representation of request
         normalized = {
             "actions": req.actions,
             "extra_fields": req.extra_fields,
             "user_id": req.user_id
         }
         
-        # 生成 SHA256 哈希
+        # Generate SHA256 hash
         content = json.dumps(normalized, sort_keys=True, ensure_ascii=False)
         return hashlib.sha256(content.encode('utf-8')).hexdigest()
     
@@ -133,34 +133,34 @@ class AsyncToolsService:
         request: ActionRequest, 
         user_id: str
     ) -> Tuple[AgentResponse, Dict[str, str]]:
-        """执行批量工具动作
+        """Execute batch tool actions
         
         Args:
-            request: 批量动作请求
-            user_id: 用户ID
+            request: Batch action request
+            user_id: User ID
             
         Returns:
-            Tuple[AgentResponse, Dict[str, str]]: 响应数据和响应头
+            Tuple[AgentResponse, Dict[str, str]]: Response data and headers
         """
         start_time = time.time()
         
-        # 生成或使用提供的追踪ID
+        # Generate or use provided trace ID
         trace_id = request.trace_id or str(uuid.uuid4())
         
         logger.info(f"[{trace_id}] Received batch request: {len(request.actions)} actions")
         
-        # 输入验证
+        # Input validation
         if len(request.actions) != len(request.trajectory_ids):
             raise ValueError("actions and trajectory_ids must have the same length")
         
         if request.extra_fields and len(request.extra_fields) != len(request.actions):
             raise ValueError("extra_fields must have the same length as actions")
         
-        # 填充默认的 extra_fields
+        # Fill default extra_fields
         if not request.extra_fields:
             request.extra_fields = [{}] * len(request.actions)
         
-        # 缓存检查
+        # Cache check
         cache_key = None
         headers = {"X-Trace-ID": trace_id}
         
@@ -169,12 +169,12 @@ class AsyncToolsService:
             cached_result = _get_from_cache(cache_key)
             if cached_result:
                 logger.info(f"[{trace_id}] Cache hit for request")
-                # 更新追踪ID
+                # Update trace ID
                 cached_result["trace_id"] = trace_id
                 headers["X-Cache-Status"] = "hit"
                 return AgentResponse(**cached_result), headers
         
-        # 获取信号量并执行批量处理
+        # Acquire semaphore and execute batch processing
         await _semaphore.acquire()
         try:
             obs, dones, valids, returned_trace_id = await asyncio.wait_for(
@@ -193,10 +193,10 @@ class AsyncToolsService:
         finally:
             _semaphore.release()
         
-        # 计算处理时间
+        # Calculate processing time
         processing_time_ms = (time.time() - start_time) * 1000
         
-        # 构建响应
+        # Build response
         result = {
             "observations": obs,
             "dones": dones,
@@ -205,12 +205,12 @@ class AsyncToolsService:
             "processing_time_ms": processing_time_ms
         }
         
-        # 缓存结果
+        # Cache result
         if cache_key:
             _set_to_cache(cache_key, result)
             headers["X-Cache-Status"] = "miss"
         
-        # 设置响应头
+        # Set response headers
         headers["X-Trace-ID"] = returned_trace_id
         headers["X-Processing-Time-MS"] = str(processing_time_ms)
         
@@ -219,7 +219,7 @@ class AsyncToolsService:
         return AgentResponse(**result), headers
     
     def get_health_status(self) -> Dict[str, Any]:
-        """获取健康检查状态"""
+        """Get health status"""
         return {
             "status": "healthy",
             "timestamp": time.time(),
@@ -232,15 +232,15 @@ class AsyncToolsService:
         }
     
     def get_metrics(self) -> Dict[str, Any]:
-        """获取性能指标"""
+        """Get performance metrics"""
         cache = _get_cache()
         
-        # 统计缓存状态
+        # Statistics cache status
         total_entries = len(cache)
         expired_entries = sum(1 for entry in cache.values() if entry.is_expired())
         active_entries = total_entries - expired_entries
         
-        # 获取信号量状态
+        # Get semaphore status
         semaphore_available = _semaphore._value if _semaphore else 0
         semaphore_total = _config.max_concurrent_requests
         
@@ -266,7 +266,7 @@ class AsyncToolsService:
         }
     
     def get_config(self) -> Dict[str, Any]:
-        """获取配置信息"""
+        """Get configuration info"""
         return {
             "max_concurrent_requests": _config.max_concurrent_requests,
             "request_timeout": _config.request_timeout,

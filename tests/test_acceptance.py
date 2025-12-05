@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-验收测试脚本 - 验证批量工具API的所有功能
+Acceptance Test Script - Verifies all features of the batch tool API
 """
 
 import asyncio
@@ -14,33 +14,33 @@ import pytest
 BASE_URL = "http://127.0.0.1:8000"
 API_KEY = "tlk_live_jHZt0Rw5tt6My8VkCnn95zGKttm9RITOAv74rFfrOpY"  # change to a valid one
 
-# 认证头
+# Auth headers
 AUTH_HEADERS = {"X-API-Key": API_KEY}
 
 
 @pytest.fixture
 def base_url():
-    """提供基础URL"""
+    """Provide base URL"""
     return BASE_URL
 
 
 @pytest.fixture
 def auth_headers():
-    """提供认证头"""
+    """Provide auth headers"""
     return AUTH_HEADERS
 
 
 @pytest.fixture
 def api_client(base_url, auth_headers):
-    """提供API客户端配置"""
+    """Provide API client configuration"""
     return {
         "base_url": base_url,
         "headers": auth_headers
     }
 
 def test_example_math_add(api_client):
-    """测试 example.math_add 工具的功能"""
-    # 测试基本加法
+    """Test example.math_add tool functionality"""
+    # Test basic addition
     test_data = {
         "trajectory_ids": ["math_test_1"],
         "actions": ['{"a": 5, "b": 3}'],
@@ -54,27 +54,27 @@ def test_example_math_add(api_client):
         headers=api_client['headers']
     )
     
-    # 使用pytest断言
-    assert response.status_code == 200, f"API请求失败: {response.text}"
+    # Use pytest assertion
+    assert response.status_code == 200, f"API request failed: {response.text}"
     
     data = response.json()
     observations = data.get('observations', [])
     
-    assert len(observations) > 0, "没有返回观察结果"
+    assert len(observations) > 0, "No observations returned"
     
     result = observations[0]
-    # 验证计算结果 (5 + 3 = 8)
+    # Verify calculation result (5 + 3 = 8)
     if isinstance(result, dict):
-        # 如果返回的是字典，提取result字段
+        # If result is a dict, extract result field
         actual_result = result.get('result', result)
-        assert actual_result == 8.0, f"计算结果错误，期望8.0，实际得到{actual_result}"
+        assert actual_result == 8.0, f"Calculation result error, expected 8.0, got {actual_result}"
     else:
-        # 如果返回的是简单值
-        assert result == 8, f"计算结果错误，期望8，实际得到{result}"
+        # If result is a simple value
+        assert result == 8, f"Calculation result error, expected 8, got {result}"
 
 def test_example_echo(api_client):
-    """测试 example.echo 工具的功能"""
-    # 测试echo功能
+    """Test example.echo tool functionality"""
+    # Test echo functionality
     test_message = "Hello from test!"
     test_data = {
         "trajectory_ids": ["echo_test_1"],
@@ -89,27 +89,27 @@ def test_example_echo(api_client):
         headers=api_client['headers']
     )
     
-    # 使用pytest断言
-    assert response.status_code == 200, f"API请求失败: {response.text}"
+    # Use pytest assertion
+    assert response.status_code == 200, f"API request failed: {response.text}"
     
     data = response.json()
     observations = data.get('observations', [])
     
-    assert len(observations) > 0, "没有返回观察结果"
+    assert len(observations) > 0, "No observations returned"
     
     result = observations[0]
-    # 验证echo结果
+    # Verify echo result
     if isinstance(result, dict):
-        # 如果返回的是字典，提取echo字段
+        # If result is a dict, extract echo field
         actual_result = result.get('echo', result)
-        assert actual_result == test_message, f"Echo结果错误，期望'{test_message}'，实际得到'{actual_result}'"
+        assert actual_result == test_message, f"Echo result error, expected '{test_message}', got '{actual_result}'"
     else:
-        # 如果返回的是简单值
-        assert result == test_message, f"Echo结果错误，期望'{test_message}'，实际得到'{result}'"
+        # If result is a simple value
+        assert result == test_message, f"Echo result error, expected '{test_message}', got '{result}'"
 
 def test_batch_api_multiple_actions(api_client):
-    """验证 /v1/tools/get_observation 接口能接受 N>1 条 action 并并发执行"""
-    # 准备测试数据 - 多个action，使用 example.math_add
+    """Verify /v1/tools/get_observation endpoint can accept N>1 actions and execute concurrently"""
+    # Prepare test data - multiple actions, use example.math_add
     test_data = {
         "trajectory_ids": ["traj_1", "traj_2", "traj_3"],
         "actions": [
@@ -135,34 +135,34 @@ def test_batch_api_multiple_actions(api_client):
     
     processing_time = end_time - start_time
     
-    # 使用pytest断言
-    assert response.status_code == 200, f"API请求失败: {response.text}"
+    # Use pytest assertion
+    assert response.status_code == 200, f"API request failed: {response.text}"
     
     data = response.json()
     observations = data.get('observations', [])
     
-    # 验证返回的观察数量
-    assert len(observations) == 3, f"期望返回3个观察结果，实际返回{len(observations)}个"
+    # Verify returned observation count
+    assert len(observations) == 3, f"Expected 3 observations, got {len(observations)}"
     
-    # 验证计算结果
+    # Verify calculation results
     expected_results = [15.0, 35.0, 55.0]  # 10+5, 20+15, 30+25
     for i, obs in enumerate(observations):
         if isinstance(obs, dict):
-            # 如果返回的是字典，提取result字段
+            # If result is a dict, extract result field
             actual_result = obs.get('result', obs)
-            assert actual_result == expected_results[i], f"计算结果{i+1}错误，期望{expected_results[i]}，实际得到{actual_result}"
+            assert actual_result == expected_results[i], f"Calculation result {i+1} error, expected {expected_results[i]}, got {actual_result}"
         else:
-            # 如果返回的是简单值
-            assert obs == expected_results[i], f"计算结果{i+1}错误，期望{expected_results[i]}，实际得到{obs}"
+            # If result is a simple value
+            assert obs == expected_results[i], f"Calculation result {i+1} error, expected {expected_results[i]}, got {obs}"
     
-    # 验证处理时间合理（应该小于5秒）
-    assert processing_time < 5.0, f"处理时间过长: {processing_time:.3f}s"
+    # Verify processing time is reasonable (should be less than 5 seconds)
+    assert processing_time < 5.0, f"Processing time too long: {processing_time:.3f}s"
     
-    # 验证响应包含必要字段
-    assert 'trace_id' in data or 'processing_time_ms' in data, "响应缺少追踪信息"
+    # Verify response contains necessary fields
+    assert 'trace_id' in data or 'processing_time_ms' in data, "Response missing trace info"
 
 def test_async_sync_support(api_client):
-    """验证同时支持 async 与 sync 工具（sync 不阻塞事件循环）"""
+    """Verify support for both async and sync tools (sync does not block event loop)"""
     piston_action_obj1 = {"language": "python", "files": [{"name": "main.py", "content": "print(2**5+145)"}]}
     piston_action_obj2 = {"language": "python", "files": [{"name": "main.py", "content": "print('ok hahahahah')"}]}
     piston_action_obj3 = {"language": "python", "files": [{"name": "main.py", "content": "print('Hello world')"}]}
@@ -203,15 +203,15 @@ def test_async_sync_support(api_client):
     
     processing_time = end_time - start_time
     
-    # 使用pytest断言
-    assert response.status_code == 200, f"API请求失败: {response.text}"
+    # Use pytest assertion
+    assert response.status_code == 200, f"API request failed: {response.text}"
     
     data = response.json()
     observations = data.get('observations', [])
     
-    assert len(observations) == 6, f"期望返回6个观察结果，实际返回{len(observations)}个"
+    assert len(observations) == 6, f"Expected 6 observations, got {len(observations)}"
     
-    # 验证混合工具的结果
+    # Verify mixed tool results
     expected_results = [3.0, "sync test", 7.0]
     for i, obs in enumerate(observations[:3]):
         if isinstance(obs, dict):
@@ -219,19 +219,19 @@ def test_async_sync_support(api_client):
                 actual_result = obs.get('echo', obs)
             else:
                 actual_result = obs.get('result', obs)
-            assert actual_result == expected_results[i], f"结果{i+1}错误，期望{expected_results[i]}，实际得到{actual_result}"
+            assert actual_result == expected_results[i], f"Result {i+1} error, expected {expected_results[i]}, got {actual_result}"
         else:
-            assert obs == expected_results[i], f"结果{i+1}错误，期望{expected_results[i]}，实际得到{obs}"
+            assert obs == expected_results[i], f"Result {i+1} error, expected {expected_results[i]}, got {obs}"
 
     for j in range(3, 6):
         piston_obs = observations[j]
         if isinstance(piston_obs, dict):
             piston_result = piston_obs.get('result') or piston_obs.get('error') or piston_obs
-            assert isinstance(piston_result, str) and len(piston_result) > 0, "piston结果格式不正确"
+            assert isinstance(piston_result, str) and len(piston_result) > 0, "piston result format incorrect"
         else:
-            assert isinstance(piston_obs, str) and len(piston_obs) > 0, "piston结果格式不正确"
+            assert isinstance(piston_obs, str) and len(piston_obs) > 0, "piston result format incorrect"
 
-    # 追加：测试 bash.execute 和 ipython.execute
+    # Append: Test bash.execute and ipython.execute
     bash_action = json.dumps({"commands": "echo hello && echo 123"})
     ipy_action = json.dumps({"action": "<python>print('ipython ok')</python>"})
     test_data2 = {
@@ -245,51 +245,51 @@ def test_async_sync_support(api_client):
         json=test_data2,
         headers=api_client['headers']
     )
-    assert response2.status_code == 200, f"API请求失败: {response2.text}"
+    assert response2.status_code == 200, f"API request failed: {response2.text}"
     data2 = response2.json()
     obs2 = data2.get('observations', [])
-    assert len(obs2) == 2, f"期望返回2个观察结果，实际返回{len(obs2)}个"
-    # bash 输出应包含 hello 和 123
+    assert len(obs2) == 2, f"Expected 2 observations, got {len(obs2)}"
+    # bash output should contain hello and 123
     bash_obs = obs2[0]
     if isinstance(bash_obs, dict):
         bash_output = bash_obs.get('output') or bash_obs.get('observation') or str(bash_obs)
     else:
         bash_output = str(bash_obs)
-    assert "hello" in bash_output and "123" in bash_output, "bash输出不包含预期内容"
-    # ipython 输出应包含 ipython ok
+    assert "hello" in bash_output and "123" in bash_output, "bash output missing expected content"
+    # ipython output should contain ipython ok
     ipy_obs = obs2[1]
     if isinstance(ipy_obs, dict):
         ipy_output = ipy_obs.get('observation') or ipy_obs.get('execution_result') or str(ipy_obs)
     else:
         ipy_output = str(ipy_obs)
-    assert "ipython ok" in ipy_output, "ipython输出不包含预期内容"
+    assert "ipython ok" in ipy_output, "ipython output missing expected content"
     
-    # 验证处理时间合理
-    assert processing_time < 5.0, f"处理时间过长: {processing_time:.3f}s"
+    # Verify processing time is reasonable
+    assert processing_time < 5.0, f"Processing time too long: {processing_time:.3f}s"
 
 @pytest.mark.parametrize("batch_size", [100, 500, 1000])
 def test_performance_comparison(api_client, batch_size):
-    """验证大批量（≥1k）时吞吐显著优于旧接口（至少 ×2，并与线程池大小正相关）"""
-    # 1. 测试批量接口性能
+    """Verify large batch (>=1k) throughput is significantly better than legacy API (at least x2, correlated with thread pool size)"""
+    # 1. Test batch API performance
     batch_time = _test_batch_performance(api_client, batch_size)
-    assert batch_time is not None, "批量测试失败"
+    assert batch_time is not None, "Batch test failed"
     
-    # 2. 测试单个请求性能（模拟旧接口）
+    # 2. Test single request performance (simulate legacy API)
     single_time = _test_single_requests_performance(api_client, batch_size)
-    assert single_time is not None, "单个请求测试失败"
+    assert single_time is not None, "Single request test failed"
     
-    # 3. 计算性能提升
+    # 3. Calculate performance improvement
     speedup = single_time / batch_time if batch_time > 0 else 0
     
-    # 验证性能提升至少1.5倍（降低要求以适应测试环境）
-    assert speedup >= 1.5, f"性能提升不足: {speedup:.1f}x < 1.5x (批量: {batch_time:.3f}s, 单个: {single_time:.3f}s)"
+    # Verify performance improvement at least 1.5x (lower requirement for test environment)
+    assert speedup >= 1.5, f"Performance improvement insufficient: {speedup:.1f}x < 1.5x (Batch: {batch_time:.3f}s, Single: {single_time:.3f}s)"
     
-    # 验证处理时间合理
-    assert batch_time < 30.0, f"批量处理时间过长: {batch_time:.3f}s"
-    assert single_time < 60.0, f"单个请求处理时间过长: {single_time:.3f}s"
+    # Verify processing time is reasonable
+    assert batch_time < 30.0, f"Batch processing time too long: {batch_time:.3f}s"
+    assert single_time < 60.0, f"Single request processing time too long: {single_time:.3f}s"
 
 def _test_batch_performance(api_client: dict, batch_size: int) -> float:
-    """测试批量接口性能"""
+    """Test batch API performance"""
     trajectory_ids = [f"batch_perf_{i}" for i in range(batch_size)]
     actions = [f'{{"a": {i}, "b": {i+1}}}' for i in range(batch_size)]
     extra_fields = [{"tool": "example.math_add"}] * batch_size
@@ -316,17 +316,17 @@ def _test_batch_performance(api_client: dict, batch_size: int) -> float:
 
 
 def _test_single_requests_performance(api_client: dict, batch_size: int) -> float:
-    """测试单个请求性能（模拟旧接口）"""
+    """Test single request performance (simulate legacy API)"""
     start_time = time.time()
     
-    # 使用线程池模拟并发单个请求
+    # Use thread pool to simulate concurrent single requests
     with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
         futures = []
         for i in range(batch_size):
             future = executor.submit(_send_single_request, api_client, i)
             futures.append(future)
         
-        # 等待所有请求完成
+        # Wait for all requests to complete
         success_count = 0
         for future in concurrent.futures.as_completed(futures):
             if future.result():
@@ -334,14 +334,14 @@ def _test_single_requests_performance(api_client: dict, batch_size: int) -> floa
     
     end_time = time.time()
     
-    if success_count >= batch_size * 0.8:  # 允许20%的失败率
+    if success_count >= batch_size * 0.8:  # Allow 20% failure rate
         return end_time - start_time
     else:
-        return end_time - start_time  # 仍然返回时间，但测试会在上层失败
+        return end_time - start_time  # Still return time, but test will fail at upper level
 
 
 def _send_single_request(api_client: dict, index: int) -> bool:
-    """发送单个请求"""
+    """Send single request"""
     test_data = {
         "trajectory_ids": [f"single_perf_{index}"],
         "actions": [f'{{"a": {index}, "b": {index+1}}}'],
@@ -360,8 +360,8 @@ def _send_single_request(api_client: dict, index: int) -> bool:
         return False
 
 def test_math_add_error_handling(api_client):
-    """测试 math_add 工具的错误处理"""
-    # 测试无效参数
+    """Test math_add tool error handling"""
+    # Test invalid parameters
     test_data = {
         "trajectory_ids": ["error_test"],
         "actions": ['{"a": "invalid", "b": 5}'],
@@ -375,24 +375,24 @@ def test_math_add_error_handling(api_client):
         headers=api_client['headers']
     )
     
-    # 验证返回了合适的状态码
-    assert response.status_code in [200, 400, 404, 500], f"意外的状态码: {response.status_code}"
+    # Verify returned appropriate status code
+    assert response.status_code in [200, 400, 404, 500], f"Unexpected status code: {response.status_code}"
     
-    # 尝试解析JSON响应
+    # Try parsing JSON response
     try:
         data = response.json()
-        # 如果是200状态码，检查是否有错误信息在observations中
+        # If 200 OK, check if error info is in observations
         if response.status_code == 200:
             observations = data.get('observations', [])
-            assert len(observations) > 0, "应该返回错误观察结果"
+            assert len(observations) > 0, "Should return error observation"
     except ValueError:
-        # 如果无法解析JSON，确保状态码表明错误
-        assert response.status_code >= 400, "无法解析JSON但状态码不表示错误"
+        # If JSON parsing fails, ensure status code indicates error
+        assert response.status_code >= 400, "JSON parse failed but status code does not indicate error"
 
 
 def test_error_handling_invalid_tool(api_client):
-    """验证超时、异常都有结构化返回（HTTP 408/500 与字段 error/invalid_reason）"""
-    # 测试无效工具
+    """Verify timeout/exceptions return structured response (HTTP 408/500 with error/invalid_reason fields)"""
+    # Test invalid tool
     test_data = {
         "trajectory_ids": ["error_test"],
         "actions": ['{}'],
@@ -406,78 +406,78 @@ def test_error_handling_invalid_tool(api_client):
         headers=api_client['headers']
     )
     
-    # 验证返回了合适的状态码
-    assert response.status_code in [200, 400, 404, 500], f"期望错误状态码，但得到: {response.status_code}"
+    # Verify returned appropriate status code
+    assert response.status_code in [200, 400, 404, 500], f"Expected error status code, but got: {response.status_code}"
     
-    # 尝试解析JSON响应
+    # Try parsing JSON response
     try:
         data = response.json()
-        # 验证错误信息结构
+        # Verify error info structure
         if response.status_code == 200:
-            # 如果是200，错误应该在observations中
+            # If 200, error should be in observations
             observations = data.get('observations', [])
-            assert len(observations) > 0, "应该返回错误观察结果"
+            assert len(observations) > 0, "Should return error observation"
         else:
-            # 如果是错误状态码，应该有错误信息
-            assert 'error' in data or 'detail' in data or 'message' in data, "错误响应应包含错误信息"
+            # If error status code, should contain error info
+            assert 'error' in data or 'detail' in data or 'message' in data, "Error response should contain error info"
     except ValueError:
-        # 如果无法解析JSON，确保状态码表明错误
-        assert response.status_code >= 400, "无法解析JSON但状态码不表示错误"
+        # If JSON parsing fails, ensure status code indicates error
+        assert response.status_code >= 400, "JSON parse failed but status code does not indicate error"
 
 def test_health_endpoint(base_url):
-    """测试健康检查端点（不需要认证）"""
+    """Test health check endpoint (no auth required)"""
     health_response = requests.get(f"{base_url}/v1/tools/health")
-    assert health_response.status_code == 200, f"健康检查失败: {health_response.status_code}"
+    assert health_response.status_code == 200, f"Health check failed: {health_response.status_code}"
 
 
 def test_config_endpoint(api_client):
-    """测试配置端点（需要认证）"""
+    """Test config endpoint (auth required)"""
     config_response = requests.get(
         f"{api_client['base_url']}/v1/tools/config", 
         headers=api_client['headers']
     )
-    assert config_response.status_code == 200, f"配置端点失败: {config_response.status_code}"
+    assert config_response.status_code == 200, f"Config endpoint failed: {config_response.status_code}"
 
 
 def test_metrics_endpoint(api_client):
-    """测试指标端点（需要认证）"""
+    """Test metrics endpoint (auth required)"""
     metrics_response = requests.get(
         f"{api_client['base_url']}/v1/tools/metrics", 
         headers=api_client['headers']
     )
-    assert metrics_response.status_code == 200, f"指标端点失败: {metrics_response.status_code}"
+    assert metrics_response.status_code == 200, f"Metrics endpoint failed: {metrics_response.status_code}"
     
-    # 验证返回的是有效JSON
+    # Verify response is valid JSON
     try:
         metrics_data = metrics_response.json()
-        assert isinstance(metrics_data, dict), "指标数据应该是字典格式"
+        assert isinstance(metrics_data, dict), "Metrics data should be a dictionary"
     except ValueError:
-        pytest.fail("指标端点返回的不是有效JSON")
+        pytest.fail("Metrics endpoint did not return valid JSON")
 
 
 def test_backward_compatibility_root_endpoint(base_url):
-    """验证根路径端点仍然工作"""
+    """Verify root endpoint still works"""
     try:
         root_response = requests.get(f"{base_url}/")
-        # 根路径可能返回200或重定向，都是正常的
-        assert root_response.status_code in [200, 301, 302, 307, 308], f"根路径异常: {root_response.status_code}"
+        # Root path might return 200 or redirect, both are normal
+        assert root_response.status_code in [200, 301, 302, 307, 308], f"Root endpoint abnormal: {root_response.status_code}"
     except Exception as e:
-        pytest.fail(f"根路径测试失败: {e}")
+        pytest.fail(f"Root endpoint test failed: {e}")
 
 
 def test_backward_compatibility_docs_endpoint(base_url):
-    """验证文档端点仍然工作"""
+    """Verify docs endpoint still works"""
     try:
         docs_response = requests.get(f"{base_url}/docs")
-        # 文档端点应该返回200或重定向
-        assert docs_response.status_code in [200, 301, 302, 307, 308], f"文档端点异常: {docs_response.status_code}"
+        # Docs endpoint should return 200 or redirect
+        assert docs_response.status_code in [200, 301, 302, 307, 308], f"Docs endpoint abnormal: {docs_response.status_code}"
     except Exception as e:
-        pytest.fail(f"文档端点测试失败: {e}")
+        pytest.fail(f"Docs endpoint test failed: {e}")
 
-# pytest会自动发现和运行所有以test_开头的函数
-# 不需要main函数
+# pytest will automatically discover and run all functions starting with test_
+# No main function needed
 
-# 如果需要运行测试，使用以下命令：
+# To run tests, use the following command:
 # pytest test_acceptance.py -v
-# 或者运行特定测试：
+# Or run specific test:
 # pytest test_acceptance.py::test_example_math_add -v

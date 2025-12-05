@@ -184,15 +184,15 @@ def make_connections_router(config: RouterConfig) -> APIRouter:
         
         return [
             ToolDefinitionResponse(
-                tool_key=tool.tool_key,
+                tool_key=tool.slug,
                 name=tool.name,
                 description=tool.description,
-                input_schema=tool.input_schema,
-                default_enabled=tool.default_enabled,
-                default_config=tool.default_config,
+                input_schema=tool.parameters,
+                default_enabled=True,
+                default_config=None,
                 required_scopes=tool.required_scopes,
-                version=tool.version,
-                digest=tool.digest
+                version=None,
+                digest=None
             )
             for tool in tool_defs
         ]

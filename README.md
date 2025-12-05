@@ -1,108 +1,108 @@
 # Terrakit Platform
 
-Terrakit Platform是一个基于FastAPI的后端服务，为Terrakit SDK提供API支持。该平台提供用户认证、工具管理、API密钥管理等核心功能。
+Terrakit Platform is a FastAPI-based backend service that provides API support for the Terrakit SDK. The platform offers core features such as user authentication, tool management, and API key management.
 
-## 功能特性
+## Features
 
-### 🔐 认证系统
-- **用户注册与登录**：支持邮箱密码注册，密码使用Argon2哈希加密
-- **JWT认证**：为GUI应用提供Bearer Token认证
-- **API Key认证**：为SDK提供API Key认证
-- **密码策略**：强制密码最小长度和字符集要求
-- **速率限制**：防止暴力破解和滥用
+### 🔐 Authentication System
+- **User Registration & Login**: Supports email/password registration with Argon2 hashing.
+- **JWT Authentication**: Provides Bearer Token authentication for GUI applications.
+- **API Key Authentication**: Provides API Key authentication for the SDK.
+- **Password Policy**: Enforces minimum length and character set requirements.
+- **Rate Limiting**: Prevents brute force attacks and abuse.
 
-### 🔑 API Key管理
-- **创建API Key**：支持自定义标签和前缀
-- **列表查看**：查看用户所有API Key（已脱敏）
-- **撤销功能**：安全删除不需要的API Key
-- **数量限制**：每用户最多5个API Key
+### 🔑 API Key Management
+- **Create API Key**: Supports custom labels and prefixes.
+- **List Keys**: View all user API Keys (masked).
+- **Revoke Key**: Securely delete unused API Keys.
+- **Limit**: Maximum of 5 API Keys per user.
 
-### 🛠️ 工具系统
-- **插件架构**：支持动态加载工具插件
-- **内置工具包**：预装常用工具
-- **扩展点支持**：通过entry points加载第三方工具
+### 🛠️ Tool System
+- **Plugin Architecture**: Supports dynamic loading of tool plugins.
+- **Built-in Toolkits**: Pre-installed common tools.
+- **Extension Support**: Load third-party tools via entry points.
 
-## 安装指南
+## Installation Guide
 
-### 系统要求
+### System Requirements
 
-- **Python**: 3.9 或更高版本
-- **操作系统**: Linux, macOS, Windows
-- **数据库**: SQLite（开发环境）或 PostgreSQL（生产环境）
-- **内存**: 最少 512MB RAM
-- **磁盘空间**: 最少 100MB 可用空间
+- **Python**: 3.9 or higher
+- **Operating System**: Linux, macOS, Windows
+- **Database**: SQLite (Development) or PostgreSQL (Production)
+- **Memory**: Minimum 512MB RAM
+- **Disk Space**: Minimum 100MB free space
 
-### 第一步：获取源码
+### Step 1: Get Source Code
 
 ```bash
-# 方式1：从Git仓库克隆（推荐）
+# Method 1: Clone from Git repository (Recommended)
 git clone <repository-url>
 cd terrakit_platform
 
-# 方式2：下载源码包
-# 下载并解压源码包到本地目录
+# Method 2: Download Source Archive
+# Download and extract the source archive to a local directory
 ```
 
-### 第二步：创建虚拟环境（推荐）
+### Step 2: Create Virtual Environment (Recommended)
 
 ```bash
-# 创建虚拟环境
+# Create virtual environment
 python -m venv venv
 
-# 激活虚拟环境
+# Activate virtual environment
 # Linux/macOS:
 source venv/bin/activate
 # Windows:
 venv\Scripts\activate
 ```
 
-### 第三步：安装依赖
+### Step 3: Install Dependencies
 
 ```bash
-# 安装基础依赖
+# Install base dependencies
 pip install -e .
 
-# 开发环境安装（包含测试工具）
+# Install development dependencies (includes testing tools)
 pip install -e ".[dev]"
 
-# 验证安装
-python -c "import terrakit; print('安装成功！')"
+# Verify installation
+python -c "import terrakit; print('Installation successful!')"
 ```
 
-### 第四步：环境配置
+### Step 4: Environment Configuration
 
-1. **复制配置模板**：
+1. **Copy Configuration Template**:
 ```bash
-cp .env.example .env  # 如果存在模板文件
-# 或手动创建 .env 文件
+cp .env.example .env  # If the template file exists
+# Or manually create .env file
 ```
 
-2. **编辑配置文件** `.env`：
+2. **Edit Configuration File** `.env`:
 ```env
 # ===================
-# 数据库配置
+# Database Configuration
 # ===================
-# 开发环境使用SQLite
+# Use SQLite for development
 TL_DB_URL=sqlite:///./terrakit_platform.db
-# 生产环境使用PostgreSQL
+# Use PostgreSQL for production
 # TL_DB_URL=postgresql://username:password@localhost:5432/terrakit_db
 
 # ===================
-# 安全配置
+# Security Configuration
 # ===================
-# JWT密钥（生产环境必须更改）
+# JWT Secret (Must change in production)
 TL_JWT_SECRET=your_super_secret_jwt_key_change_in_production
-# API Key加密密钥（生产环境必须更改）
+# API Key KDF Secret (Must change in production)
 TL_APIKEY_KDF_SECRET=your_super_secret_apikey_kdf_change_in_production
 
 # ===================
-# 应用配置
+# Application Configuration
 # ===================
-# 环境设置：dev, staging, production
+# Environment setting: dev, staging, production
 TL_ENV=dev
 
 # ===================
-# OAuth配置（可选）
+# OAuth Configuration (Optional)
 # ===================
 # GitHub OAuth
 GITHUB_OAUTH_CLIENT_ID=your_github_client_id
@@ -113,48 +113,48 @@ GOOGLE_OAUTH_CLIENT_ID=your_google_client_id
 GOOGLE_OAUTH_CLIENT_SECRET=your_google_client_secret
 ```
 
-**🔒 安全提示**：
-- 生产环境必须更改所有默认密钥
-- 不要将 `.env` 文件提交到版本控制系统
-- 使用强密码和随机密钥
+**🔒 Security Notice**:
+- Must change all default secrets in production environment.
+- Do not commit `.env` file to version control system.
+- Use strong passwords and random keys.
 
-### 第五步：初始化数据库
+### Step 5: Initialize Database
 
 ```bash
-# 初始化数据库表结构和测试数据
+# Initialize database schema and test data
 python scripts/init_db.py
 
-# 验证数据库
-python -c "from terrakit.db.session import engine; print('数据库连接成功！')"
+# Verify database
+python -c "from terrakit.db.session import engine; print('Database connection successful!')"
 ```
 
-### 第六步：启动服务
+### Step 6: Start Service
 
 ```bash
-# 开发模式（推荐，支持热重载）
+# Development mode (Recommended, supports hot reload)
 uvicorn src.terrakit.main:app --reload --host 0.0.0.0 --port 8000
 
-# 生产模式
+# Production mode
 uvicorn src.terrakit.main:app --host 0.0.0.0 --port 8000 --workers 4
 
-# 后台运行
+# Background run
 nohup uvicorn src.terrakit.main:app --host 0.0.0.0 --port 8000 > server.log 2>&1 &
 ```
 
-### 第七步：验证安装
+### Step 7: Verify Installation
 
-1. **检查服务状态**：
+1. **Check Service Status**:
 ```bash
-# 访问健康检查端点
+# Access health check endpoint
 curl http://localhost:8000/
-# 预期返回: {"status":"ok"}
+# Expected return: {"status":"ok"}
 ```
 
-2. **访问API文档**：
+2. **Access API Documentation**:
 - Swagger UI: http://localhost:8000/docs
 - ReDoc: http://localhost:8000/redoc
 
-3. **测试用户注册**：
+3. **Test User Registration**:
 ```bash
 curl -X POST "http://localhost:8000/v1/register" \
   -H "Content-Type: application/json" \
@@ -164,18 +164,18 @@ curl -X POST "http://localhost:8000/v1/register" \
   }'
 ```
 
-## 使用指南
+## User Guide
 
-### 基本使用流程
+### Basic Usage Flow
 
-1. **用户注册和登录**
-2. **创建API Key**
-3. **使用工具和服务**
-4. **管理连接和配置**
+1. **User Registration and Login**
+2. **Create API Key**
+3. **Use Tools and Services**
+4. **Manage Connections and Configurations**
 
-### 用户认证
+### User Authentication
 
-#### 注册新用户
+#### Register New User
 ```bash
 curl -X POST "http://localhost:8000/v1/register" \
   -H "Content-Type: application/json" \
@@ -185,7 +185,7 @@ curl -X POST "http://localhost:8000/v1/register" \
   }'
 ```
 
-#### 用户登录
+#### User Login
 ```bash
 curl -X POST "http://localhost:8000/v1/login" \
   -H "Content-Type: application/json" \
@@ -195,11 +195,11 @@ curl -X POST "http://localhost:8000/v1/login" \
   }'
 ```
 
-### API Key管理
+### API Key Management
 
-#### 创建API Key
+#### Create API Key
 ```bash
-# 使用JWT Token
+# Use JWT Token
 curl -X POST "http://localhost:8000/v1/api-keys" \
   -H "Authorization: Bearer YOUR_JWT_TOKEN" \
   -H "Content-Type: application/json" \
@@ -209,21 +209,21 @@ curl -X POST "http://localhost:8000/v1/api-keys" \
   }'
 ```
 
-#### 使用API Key调用接口
+#### Use API Key to Call Interface
 ```bash
 curl -X GET "http://localhost:8000/v1/tools" \
   -H "X-API-Key: YOUR_API_KEY"
 ```
 
-### 工具使用
+### Tool Usage
 
-#### 获取可用工具列表
+#### Get Available Tools List
 ```bash
 curl -X GET "http://localhost:8000/v1/tools" \
   -H "X-API-Key: YOUR_API_KEY"
 ```
 
-#### 使用特定工具
+#### Use Specific Tool
 ```bash
 curl -X POST "http://localhost:8000/v1/tools/github/use" \
   -H "X-API-Key: YOUR_API_KEY" \
@@ -236,31 +236,31 @@ curl -X POST "http://localhost:8000/v1/tools/github/use" \
   }'
 ```
 
-## API文档
+## API Documentation
 
-启动服务后，访问以下地址查看API文档：
+After starting the service, access the following addresses to view API documentation:
 
 - **Swagger UI**: http://localhost:8000/docs
 - **ReDoc**: http://localhost:8000/redoc
 
-### 主要API端点
+### Main API Endpoints
 
-#### 认证相关
-- `POST /v1/register` - 用户注册
-- `POST /v1/login` - 用户登录（返回JWT）
+#### Authentication Related
+- `POST /v1/register` - User Registration
+- `POST /v1/login` - User Login (Returns JWT)
 
-#### API Key管理
-- `POST /v1/api-keys` - 创建API Key
-- `GET /v1/api-keys` - 列出API Keys
-- `DELETE /v1/api-keys/{key_id}` - 撤销API Key
+#### API Key Management
+- `POST /v1/api-keys` - Create API Key
+- `GET /v1/api-keys` - List API Keys
+- `DELETE /v1/api-keys/{key_id}` - Revoke API Key
 
-#### 工具相关
-- `GET /v1/tools` - 获取可用工具列表
-- `POST /v1/tools/{tool_name}/use` - 使用指定工具
+#### Tool Related
+- `GET /v1/tools` - Get Available Tools List
+- `POST /v1/tools/{tool_name}/use` - Use Specified Tool
 
-### 连接管理
+### Connection Management
 
-#### 创建连接
+#### Create Connection
 ```bash
 curl -X POST "http://localhost:8000/v1/connections" \
   -H "X-API-Key: YOUR_API_KEY" \
@@ -274,22 +274,22 @@ curl -X POST "http://localhost:8000/v1/connections" \
   }'
 ```
 
-#### 列出连接
+#### List Connections
 ```bash
 curl -X GET "http://localhost:8000/v1/connections" \
   -H "X-API-Key: YOUR_API_KEY"
 ```
 
-### Python SDK 使用
+### Python SDK Usage
 
-#### 安装Python客户端
+#### Install Python Client
 ```bash
-pip install terrakit-client  # 如果有独立客户端包
-# 或直接使用requests
+pip install terrakit-client  # If there is a standalone client package
+# Or use requests directly
 pip install requests
 ```
 
-#### Python代码示例
+#### Python Code Example
 ```python
 import requests
 import json
@@ -303,7 +303,7 @@ class TerrakitClient:
             self.session.headers.update({"X-API-Key": api_key})
     
     def register(self, email, password):
-        """注册新用户"""
+        """Register new user"""
         response = self.session.post(
             f"{self.base_url}/v1/register",
             json={"email": email, "password": password}
@@ -311,7 +311,7 @@ class TerrakitClient:
         return response.json()
     
     def login(self, email, password):
-        """用户登录"""
+        """User login"""
         response = self.session.post(
             f"{self.base_url}/v1/login",
             json={"email": email, "password": password}
@@ -319,7 +319,7 @@ class TerrakitClient:
         return response.json()
     
     def create_api_key(self, jwt_token, label, prefix=None):
-        """创建API Key"""
+        """Create API Key"""
         headers = {"Authorization": f"Bearer {jwt_token}"}
         data = {"label": label}
         if prefix:
@@ -333,12 +333,12 @@ class TerrakitClient:
         return response.json()
     
     def list_tools(self):
-        """获取工具列表"""
+        """Get tool list"""
         response = self.session.get(f"{self.base_url}/v1/sdk/tools")
         return response.json()
     
     def execute_tool(self, tool_slug, inputs, metadata=None):
-        """执行工具"""
+        """Execute tool"""
         response = self.session.post(
             f"{self.base_url}/v1/sdk/tools/{tool_slug}/execute",
             json={"inputs": inputs, "metadata": metadata or {}}
@@ -346,14 +346,14 @@ class TerrakitClient:
         return response.json()
     
     def list_toolkit_connections(self, toolkit):
-        """获取指定工具包的连接列表"""
+        """Get connection list for specified toolkit"""
         response = self.session.get(
             f"{self.base_url}/v1/sdk/toolkits/{toolkit}/connections"
         )
         return response.json()
     
     def create_connection(self, toolkit, name, auth_method="oauth2"):
-        """创建新连接"""
+        """Create new connection"""
         data = {
             "name": name,
             "auth_method": auth_method,
@@ -367,131 +367,131 @@ class TerrakitClient:
         return response.json()
     
     def get_connection_status(self, connection_id):
-        """获取连接状态"""
+        """Get connection status"""
         response = self.session.get(
             f"{self.base_url}/v1/sdk/connections/{connection_id}"
         )
         return response.json()
 
-# 使用示例
+# Usage Example
 client = TerrakitClient()
 
-# 注册用户
+# Register User
 result = client.register("user@example.com", "SecurePassword123!")
-print("注册结果:", result)
+print("Registration Result:", result)
 
-# 登录获取JWT
+# Login to get JWT
 login_result = client.login("user@example.com", "SecurePassword123!")
 jwt_token = login_result["access_token"]
 
-# 创建API Key
+# Create API Key
 api_key_result = client.create_api_key(jwt_token, "My Python Client")
 api_key = api_key_result["key"]
 
-# 使用API Key创建新客户端
+# Create new client using API Key
 api_client = TerrakitClient(api_key=api_key)
 
-# 获取工具列表
+# Get Tool List
 tools = api_client.list_tools()
-print("可用工具:", tools)
+print("Available Tools:", tools)
 
-# 执行GitHub工具
+# Execute GitHub Tool
 github_result = api_client.execute_tool(
     "github-list-repos", 
     {"owner": "octocat"},
-    {"connection_id": 1}  # 如果需要特定连接
+    {"connection_id": 1}  # If specific connection is needed
 )
-print("GitHub仓库:", github_result)
+print("GitHub Repos:", github_result)
 
-# 获取GitHub工具包的连接列表
+# Get Connection List for GitHub Toolkit
 github_connections = api_client.list_toolkit_connections("github")
-print("GitHub连接:", github_connections)
+print("GitHub Connections:", github_connections)
 
-# 创建新的GitHub连接
+# Create New GitHub Connection
 new_connection = api_client.create_connection(
     "github", 
     "My GitHub Connection"
 )
-print("新连接:", new_connection)
+print("New Connection:", new_connection)
 
-# 检查连接状态
+# Check Connection Status
 if "id" in new_connection:
     status = api_client.get_connection_status(new_connection["id"])
-    print("连接状态:", status)
+    print("Connection Status:", status)
 ```
 
-## 开发指南
+## Development Guide
 
-### 项目结构
+### Project Structure
 
 ```
 terrakit_platform/
 ├── src/terrakit/
-│   ├── main.py              # FastAPI应用入口
-│   ├── data.py              # 工具注册和管理
-│   ├── extensions.py        # 扩展加载器
-│   ├── core/                # 核心业务逻辑
-│   │   ├── schemas.py       # Pydantic数据模型
-│   │   ├── services/        # 业务服务层
-│   │   └── utils/config.py  # 配置管理
-│   ├── db/                  # 数据库层
-│   │   ├── models.py        # SQLAlchemy模型
-│   │   └── session.py       # 数据库会话
-│   ├── routers/             # API路由
-│   │   ├── auth.py          # 认证相关API
-│   │   ├── api_keys.py      # API Key管理
-│   │   ├── tools.py         # 工具相关API
-│   │   └── connections.py   # 连接管理API
-│   └── toolkits/            # 工具包
-│       └── github.py        # GitHub工具包
-├── tests/                   # 测试文件
-├── scripts/                 # 脚本文件
-└── docs/                    # 文档
+│   ├── main.py              # FastAPI application entry point
+│   ├── data.py              # Tool registration and management
+│   ├── extensions.py        # Extension loader
+│   ├── core/                # Core business logic
+│   │   ├── schemas.py       # Pydantic data models
+│   │   ├── services/        # Business service layer
+│   │   └── utils/config.py  # Configuration management
+│   ├── db/                  # Database layer
+│   │   ├── models.py        # SQLAlchemy models
+│   │   └── session.py       # Database session
+│   ├── routers/             # API routers
+│   │   ├── auth.py          # Authentication API
+│   │   ├── api_keys.py      # API Key management
+│   │   ├── tools.py         # Tool related API
+│   │   └── connections.py   # Connection management API
+│   └── toolkits/            # Toolkits
+│       └── github.py        # GitHub toolkit
+├── tests/                   # Test files
+├── scripts/                 # Script files
+└── docs/                    # Documentation
 ```
 
-### 运行测试
+### Running Tests
 
 ```bash
-# 运行所有测试
+# Run all tests
 pytest
 
-# 运行特定测试
+# Run specific test
 pytest tests/test_auth.py
 
-# 运行安全功能测试
+# Run security feature tests
 python test_security_features.py
 ```
 
-### 添加新工具
+### Adding New Tools
 
-1. 在 `src/terrakit/toolkits/` 下创建新的工具模块
-2. 实现工具接口
-3. 在 `extensions.py` 中注册工具
+1. Create new tool module under `src/terrakit/toolkits/`
+2. Implement tool interface
+3. Register tool in `extensions.py`
 
-### 数据库迁移
+### Database Migration
 
 ```bash
-# 生成迁移文件
-alembic revision --autogenerate -m "描述变更"
+# Generate migration file
+alembic revision --autogenerate -m "Describe changes"
 
-# 应用迁移
+# Apply migration
 alembic upgrade head
 ```
 
-## 安全考虑
+## Security Considerations
 
-- 🔒 密码使用Argon2哈希，安全性高
-- 🔑 API Key使用HMAC-SHA256加密存储
-- 🚦 内置速率限制防止滥用
-- 📝 敏感信息在日志中自动脱敏
-- 🛡️ JWT Token有过期时间限制
+- 🔒 Passwords use Argon2 hashing for high security.
+- 🔑 API Keys are stored using HMAC-SHA256 encryption.
+- 🚦 Built-in rate limiting prevents abuse.
+- 📝 Sensitive information is automatically masked in logs.
+- 🛡️ JWT Tokens have expiration time limits.
 
-## 部署
+## Deployment
 
-### Docker部署
+### Docker Deployment
 
 ```dockerfile
-# Dockerfile示例
+# Dockerfile Example
 FROM python:3.11-slim
 
 WORKDIR /app
@@ -502,42 +502,42 @@ EXPOSE 8000
 CMD ["uvicorn", "src.terrakit.main:app", "--host", "0.0.0.0", "--port", "8000"]
 ```
 
-### 生产环境配置
+### Production Environment Configuration
 
-1. 使用PostgreSQL数据库
-2. 配置Redis用于缓存和会话
-3. 设置反向代理（Nginx）
-4. 启用HTTPS
-5. 配置日志收集
+1. Use PostgreSQL database.
+2. Configure Redis for caching and sessions.
+3. Set up reverse proxy (Nginx).
+4. Enable HTTPS.
+5. Configure log collection.
 
-## 故障排除
+## Troubleshooting
 
-### 安装问题
+### Installation Issues
 
-#### 1. Python版本不兼容
+#### 1. Python Version Incompatible
 ```bash
-# 检查Python版本
+# Check Python version
 python --version
-# 应该是3.9或更高版本
+# Should be 3.9 or higher
 
-# 如果版本过低，安装新版本
+# If version is too low, install new version
 # Ubuntu/Debian:
 sudo apt update && sudo apt install python3.9
-# macOS (使用Homebrew):
+# macOS (using Homebrew):
 brew install python@3.9
-# Windows: 从官网下载安装
+# Windows: Download from official website
 ```
 
-#### 2. 依赖安装失败
+#### 2. Dependency Installation Failed
 ```bash
-# 升级pip
+# Upgrade pip
 pip install --upgrade pip
 
-# 清理缓存重新安装
+# Clear cache and reinstall
 pip cache purge
 pip install -e . --no-cache-dir
 
-# 如果遇到编译错误，安装构建工具
+# If compilation errors occur, install build tools
 # Ubuntu/Debian:
 sudo apt install build-essential python3-dev
 # CentOS/RHEL:
@@ -545,152 +545,152 @@ sudo yum groupinstall "Development Tools"
 sudo yum install python3-devel
 ```
 
-#### 3. 虚拟环境问题
+#### 3. Virtual Environment Issues
 ```bash
-# 删除旧的虚拟环境
+# Delete old virtual environment
 rm -rf venv
 
-# 重新创建
+# Recreate
 python -m venv venv
 source venv/bin/activate  # Linux/macOS
-# 或
+# Or
 venv\Scripts\activate     # Windows
 
-# 重新安装依赖
+# Reinstall dependencies
 pip install -e .
 ```
 
-### 运行时问题
+### Runtime Issues
 
-#### 1. 数据库连接失败
+#### 1. Database Connection Failed
 ```bash
-# 检查数据库文件权限（SQLite）
+# Check database file permissions (SQLite)
 ls -la terrakit_platform.db
-chmod 664 terrakit_platform.db  # 如果权限不足
+chmod 664 terrakit_platform.db  # If permissions are insufficient
 
-# 测试数据库连接
+# Test database connection
 python -c "
 from terrakit.db.session import engine
 from sqlalchemy import text
 with engine.connect() as conn:
     result = conn.execute(text('SELECT 1'))
-    print('数据库连接成功！')
+    print('Database connection successful!')
 "
 
-# PostgreSQL连接测试
+# PostgreSQL connection test
 psql -h localhost -U username -d terrakit_db -c "SELECT 1;"
 ```
 
-#### 2. 端口被占用
+#### 2. Port Occupied
 ```bash
-# 检查端口占用
+# Check port usage
 netstat -tlnp | grep :8000
-# 或
+# Or
 lsof -i :8000
 
-# 杀死占用进程
+# Kill occupying process
 kill -9 <PID>
 
-# 使用其他端口启动
+# Start with another port
 uvicorn src.terrakit.main:app --port 8001
 ```
 
-#### 3. JWT Token问题
+#### 3. JWT Token Issues
 ```bash
-# 检查JWT配置
+# Check JWT configuration
 python -c "
 from terrakit.core.utils.config import get_settings
 settings = get_settings()
-print('JWT Secret长度:', len(settings.jwt_secret))
+print('JWT Secret Length:', len(settings.jwt_secret))
 print('JWT Secret:', settings.jwt_secret[:10] + '...')
 "
 
-# 重新生成JWT密钥
-python -c "import secrets; print('新JWT密钥:', secrets.token_urlsafe(32))"
+# Regenerate JWT Secret
+python -c "import secrets; print('New JWT Secret:', secrets.token_urlsafe(32))"
 ```
 
-#### 4. API Key认证失败
+#### 4. API Key Authentication Failed
 ```bash
-# 验证API Key格式
+# Verify API Key format
 curl -v -X GET "http://localhost:8000/v1/tools" \
   -H "X-API-Key: YOUR_API_KEY"
 
-# 检查API Key是否存在
+# Check if API Key exists
 python -c "
 from terrakit.db.session import SessionLocal
 from terrakit.db.models import APIKey
 with SessionLocal() as db:
     keys = db.query(APIKey).all()
     for key in keys:
-        print(f'API Key: {key.prefix}_{key.key_hash[:8]}..., 状态: {key.is_active}')
+        print(f'API Key: {key.prefix}_{key.key_hash[:8]}..., Status: {key.is_active}')
 "
 ```
 
-### 性能问题
+### Performance Issues
 
-#### 1. 响应缓慢
+#### 1. Slow Response
 ```bash
-# 检查系统资源
+# Check system resources
 top
-htop  # 如果已安装
+htop  # If installed
 
-# 检查数据库性能
-# SQLite: 使用EXPLAIN QUERY PLAN
-# PostgreSQL: 使用EXPLAIN ANALYZE
+# Check database performance
+# SQLite: Use EXPLAIN QUERY PLAN
+# PostgreSQL: Use EXPLAIN ANALYZE
 
-# 启用调试模式查看详细日志
+# Enable debug mode to view detailed logs
 export TL_ENV=dev
 uvicorn src.terrakit.main:app --reload --log-level debug
 ```
 
-#### 2. 内存使用过高
+#### 2. High Memory Usage
 ```bash
-# 监控内存使用
+# Monitor memory usage
 ps aux | grep uvicorn
 
-# 减少worker数量
+# Reduce worker count
 uvicorn src.terrakit.main:app --workers 1
 
-# 使用内存分析工具
+# Use memory profiler tool
 pip install memory-profiler
 python -m memory_profiler your_script.py
 ```
 
-### 日志和调试
+### Logs and Debugging
 
-#### 查看应用日志
+#### View Application Logs
 ```bash
-# 实时查看日志
+# View logs in real-time
 tail -f server.log
 
-# 查看错误日志
+# View error logs
 grep -i error server.log
 grep -i exception server.log
 
-# 按时间查看日志
+# View logs by time
 tail -n 100 server.log | grep "$(date '+%Y-%m-%d')"
 ```
 
-#### 启用详细日志
+#### Enable Detailed Logs
 ```bash
-# 在.env文件中添加
+# Add to .env file
 echo "TL_LOG_LEVEL=DEBUG" >> .env
 
-# 或临时启用
+# Or enable temporarily
 export TL_LOG_LEVEL=DEBUG
 uvicorn src.terrakit.main:app --reload
 ```
 
-#### 数据库调试
+#### Database Debugging
 ```bash
-# SQLite调试
+# SQLite debugging
 sqlite3 terrakit_platform.db
 .tables
 .schema users
 SELECT * FROM users LIMIT 5;
 .quit
 
-# PostgreSQL调试
+# PostgreSQL debugging
 psql -h localhost -U username -d terrakit_db
 \dt
 \d users
@@ -698,40 +698,40 @@ SELECT * FROM users LIMIT 5;
 \q
 ```
 
-### 获取帮助
+### Get Help
 
-如果以上方法都无法解决问题，请：
+If the above methods cannot solve the problem, please:
 
-1. **收集信息**：
-   - Python版本：`python --version`
-   - 操作系统：`uname -a` (Linux/macOS) 或 `systeminfo` (Windows)
-   - 错误日志：完整的错误堆栈信息
-   - 配置文件：`.env`文件内容（隐藏敏感信息）
+1. **Collect Information**:
+   - Python Version: `python --version`
+   - Operating System: `uname -a` (Linux/macOS) or `systeminfo` (Windows)
+   - Error Logs: Complete error stack trace
+   - Configuration File: `.env` file content (hide sensitive information)
 
-2. **检查文档**：
-   - API文档：http://localhost:8000/docs
-   - 项目文档：`docs/`目录
+2. **Check Documentation**:
+   - API Documentation: http://localhost:8000/docs
+   - Project Documentation: `docs/` directory
 
-3. **社区支持**：
-   - 提交Issue到项目仓库
-   - 包含详细的错误信息和复现步骤
+3. **Community Support**:
+   - Submit Issue to project repository
+   - Include detailed error information and reproduction steps
 
-## 贡献指南
+## Contribution Guide
 
-1. Fork项目
-2. 创建功能分支
-3. 提交变更
-4. 创建Pull Request
+1. Fork the project
+2. Create feature branch
+3. Submit changes
+4. Create Pull Request
 
-## 许可证
+## License
 
-本项目采用MIT许可证。详见LICENSE文件。
+This project is licensed under the MIT License. See LICENSE file for details.
 
-## 联系方式
+## Contact
 
-- 邮箱：xiongzhitong@gmail.com
+- Email: xiongzhitong@gmail.com
 
 ---
 
-**版本**: 0.1.0  
-**更新**: 2025年8月16日
+**Version**: 0.1.0  
+**Updated**: August 16, 2025

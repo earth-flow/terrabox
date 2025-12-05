@@ -1,11 +1,11 @@
 """
-异步工具路由器 - FastAPI 路由层
+Async Tools Router - FastAPI Routing Layer
 
-提供批量工具执行的 HTTP API 接口，负责：
-- 路由定义和参数验证
-- 依赖注入和认证
-- HTTP 响应处理
-- 错误处理和状态码映射
+Provides HTTP API interfaces for batch tool execution, responsible for:
+- Route definition and parameter validation
+- Dependency injection and authentication
+- HTTP response handling
+- Error handling and status code mapping
 """
 
 from typing import Any, Dict
@@ -23,15 +23,15 @@ from .deps import current_user_from_api_key, current_user_from_jwt
 
 
 def make_async_tools_router(prefix: str, current_user_dep, tags: list = None) -> APIRouter:
-    """创建异步工具路由器
+    """Create Async Tools Router
     
     Args:
-        prefix: 路由前缀
-        current_user_dep: 用户认证依赖
-        tags: 路由标签
+        prefix: Route prefix
+        current_user_dep: User authentication dependency
+        tags: Route tags
         
     Returns:
-        APIRouter: 配置好的路由器实例
+        APIRouter: Configured router instance
     """
     if tags is None:
         tags = ["async-tools"]
@@ -45,20 +45,20 @@ def make_async_tools_router(prefix: str, current_user_dep, tags: list = None) ->
         current_user: models.User = Depends(current_user_dep),
         db: Session = Depends(get_db)
     ) -> AgentResponse:
-        """批量工具执行端点
+        """Batch Tool Execution Endpoint
         
-        执行批量工具动作，支持：
-        - 智能缓存（基于请求内容哈希）
-        - 并发限制和超时控制
-        - 完整的错误处理和日志记录
-        - 追踪ID支持
+        Executes batch tool actions, supporting:
+        - Smart caching (based on request content hash)
+        - Concurrency limiting and timeout control
+        - Comprehensive error handling and logging
+        - Trace ID support
         """
         try:
-            # 创建服务实例并执行业务逻辑
+            # Create service instance and execute business logic
             service = AsyncToolsService(db)
             result, headers = await service.execute_batch_actions(request, current_user.id)
             
-            # 设置响应头
+            # Set response headers
             for key, value in headers.items():
                 response.headers[key] = value
             
@@ -75,7 +75,7 @@ def make_async_tools_router(prefix: str, current_user_dep, tags: list = None) ->
                 detail=str(e)
             )
         except Exception as e:
-            # 设置追踪ID到响应头（如果可用）
+            # Set trace ID to response headers (if available)
             if hasattr(request, 'trace_id') and request.trace_id:
                 response.headers["X-Trace-ID"] = request.trace_id
             
@@ -88,7 +88,7 @@ def make_async_tools_router(prefix: str, current_user_dep, tags: list = None) ->
     async def health_check(
         db: Session = Depends(get_db)
     ) -> Dict[str, Any]:
-        """健康检查端点"""
+        """Health Check Endpoint"""
         service = AsyncToolsService(db)
         return service.get_health_status()
     
@@ -97,7 +97,7 @@ def make_async_tools_router(prefix: str, current_user_dep, tags: list = None) ->
         current_user: models.User = Depends(current_user_dep),
         db: Session = Depends(get_db)
     ) -> Dict[str, Any]:
-        """性能指标端点（需要认证）"""
+        """Performance Metrics Endpoint (Authenticated)"""
         service = AsyncToolsService(db)
         return service.get_metrics()
     
@@ -106,14 +106,14 @@ def make_async_tools_router(prefix: str, current_user_dep, tags: list = None) ->
         current_user: models.User = Depends(current_user_dep),
         db: Session = Depends(get_db)
     ) -> Dict[str, Any]:
-        """配置信息端点（需要认证）"""
+        """Configuration Info Endpoint (Authenticated)"""
         service = AsyncToolsService(db)
         return service.get_config()
     
     return router
 
 
-# 创建预配置的路由器实例
+# Create pre-configured router instances
 sdk_router = make_async_tools_router(
     prefix="/v1/sdk",
     current_user_dep=current_user_from_api_key,
@@ -126,9 +126,9 @@ gui_router = make_async_tools_router(
     tags=["async-tools-gui"]
 )
 
-# 为了向后兼容，创建一个特殊的路由器（去掉内部的/tools前缀）
+# Create a special router for backward compatibility (removing internal /tools prefix)
 def make_legacy_batch_tools_router() -> APIRouter:
-    """创建向后兼容的批量工具路由器"""
+    """Create Backward Compatible Batch Tools Router"""
     router = APIRouter(prefix="/v1/tools", tags=["batch-tools"])
     
     @router.post("/get_observation", response_model=AgentResponse)
@@ -138,7 +138,7 @@ def make_legacy_batch_tools_router() -> APIRouter:
         current_user: models.User = Depends(current_user_from_api_key),
         db: Session = Depends(get_db)
     ) -> AgentResponse:
-        """批量工具执行端点（向后兼容）"""
+        """Batch Tool Execution Endpoint (Backward Compatible)"""
         try:
             service = AsyncToolsService(db)
             result, headers = await service.execute_batch_actions(request, current_user.id)
@@ -171,7 +171,7 @@ def make_legacy_batch_tools_router() -> APIRouter:
     async def health_check(
         db: Session = Depends(get_db)
     ) -> Dict[str, Any]:
-        """健康检查端点（向后兼容）"""
+        """Health Check Endpoint (Backward Compatible)"""
         service = AsyncToolsService(db)
         return service.get_health_status()
     
@@ -180,7 +180,7 @@ def make_legacy_batch_tools_router() -> APIRouter:
         current_user: models.User = Depends(current_user_from_api_key),
         db: Session = Depends(get_db)
     ) -> Dict[str, Any]:
-        """性能指标端点（向后兼容）"""
+        """Performance Metrics Endpoint (Backward Compatible)"""
         service = AsyncToolsService(db)
         return service.get_metrics()
     
@@ -189,7 +189,7 @@ def make_legacy_batch_tools_router() -> APIRouter:
         current_user: models.User = Depends(current_user_from_api_key),
         db: Session = Depends(get_db)
     ) -> Dict[str, Any]:
-        """配置信息端点（向后兼容）"""
+        """Configuration Info Endpoint (Backward Compatible)"""
         service = AsyncToolsService(db)
         return service.get_config()
     
