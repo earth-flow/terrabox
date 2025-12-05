@@ -8,7 +8,7 @@ and the PyGithub library.
 from typing import Any, Dict, Optional
 from github import Github
 
-from ..core.tool_registry import ToolSpec
+from ..core.registry import ToolSpec
 
 
 def _gh_sample_repos(username: str) -> list[str]:

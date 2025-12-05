@@ -7,17 +7,17 @@ from typing import List, Optional, Dict, Any
 from sqlalchemy.orm import Session
 from fastapi import HTTPException, status
 
-from ..tool_registry import ToolSpec
-from ..runtime_registry import list_toolkits, get_tool, get_handler, list_tools
+from ..registry import ToolSpec
+from ..registry import list_toolkits, get_tool, get_handler, list_tools
 from ..schemas import ToolSpecOut, ToolkitOut, ExecuteRequestIn, ExecuteResponseOut
-from ..tool_registry import get_tool_registry, ToolDefinition
+from ..registry import get_tool_registry, ToolDefinition
 class ToolService:
     """Service for tool-related operations."""
     
     @staticmethod
     def get_tools_with_status(db: Session, user_id: str) -> List[ToolSpecOut]:
         """Get all tools with their availability status for a user."""
-        from ..runtime_registry import list_toolkits, list_tools
+        from ..registry import list_toolkits, list_tools
         from .connection_service import ConnectionService
         
         toolkits = list_toolkits()

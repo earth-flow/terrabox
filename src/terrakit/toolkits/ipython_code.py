@@ -1,5 +1,5 @@
 # Fallback imports for ToolSpec
-from ..core.tool_registry import ToolSpec
+from ..core.registry import ToolSpec
 
 
 # Fallback for regex module

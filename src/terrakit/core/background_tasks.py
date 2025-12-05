@@ -10,7 +10,7 @@ from sqlalchemy import and_
 from ..db.session import get_db
 from ..db.models import Connection, ConnectionStatus, AuthMethod, Toolkit
 from .services import ConnectionService
-from .runtime_registry import list_toolkits
+from .registry import list_toolkits
 from ..extensions import load_builtin_toolkits, load_entrypoint_plugins
 
 logger = logging.getLogger(__name__)

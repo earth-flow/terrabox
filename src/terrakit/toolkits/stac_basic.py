@@ -23,7 +23,7 @@ from typing import Any, Dict, List, Optional, Union
 import os
 import json
 
-from ..core.tool_registry import ToolSpec
+from ..core.registry import ToolSpec
 
 # ---------------------------------------------------------------------
 # Lazy import flags and handles

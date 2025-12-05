@@ -5,7 +5,7 @@ itself with the Terralink platform. It includes a simple example
 tool that demonstrates the plugin registration process.
 """
 
-from ..core.tool_registry import ToolSpec
+from ..core.registry import ToolSpec
 
 
 def echo_handler(arguments: dict, context: dict, account=None):

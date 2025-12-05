@@ -16,7 +16,7 @@ from ..core.schemas import (
     EffectiveToolsResponse, ToolOverrideRequest, ToolOverrideResponse, MCPManifestResponse
 )
 from ..core.services import ConnectionService, ToolOverrideService
-from ..core.tool_registry import get_tool_registry
+from ..core.registry import get_tool_registry
 from .factory import RouterConfig, SDK_CONFIG, GUI_CONFIG
 
 

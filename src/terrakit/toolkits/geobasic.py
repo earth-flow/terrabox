@@ -23,7 +23,7 @@ import json
 import math
 
 # Import ToolSpec from your platform core (same style as your example)
-from ..core.tool_registry import ToolSpec
+from ..core.registry import ToolSpec
 
 # Optional dependency for accurate ellipsoidal area/length
 try:

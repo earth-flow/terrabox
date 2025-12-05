@@ -3,7 +3,7 @@ Bash Terminal Tool for secure command execution with persistent shell sessions
 """
 
 # Fallback imports for ToolSpec
-from ..core.tool_registry import ToolSpec
+from ..core.registry import ToolSpec
 
 # Fallback for regex module
 try:

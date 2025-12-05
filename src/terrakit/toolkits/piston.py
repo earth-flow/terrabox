@@ -51,7 +51,7 @@ except ImportError:
         'ClientConnectorError': ClientConnectorError
     })()
 
-from ..core.tool_registry import ToolSpec
+from ..core.registry import ToolSpec
 
 import logging
 

@@ -32,7 +32,7 @@ from __future__ import annotations
 from typing import Any, Dict, Optional
 import os
 
-from ..core.tool_registry import ToolSpec
+from ..core.registry import ToolSpec
 
 # Lazy import flags and references; this allows test stubs or deferred errors.
 _HAS_GEOPATCH = False

@@ -30,7 +30,7 @@ except ImportError:
         def classify(text):
             return ('en', 1.0)
 
-from ..core.tool_registry import ToolSpec
+from ..core.registry import ToolSpec
 
 class BingSearchEngine():
     """

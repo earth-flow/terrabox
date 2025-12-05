@@ -4,7 +4,7 @@ from sqlalchemy.orm import Session
 from fastapi import HTTPException, status
 
 from ...db.models import Connection as DBConnection, ToolOverride, Toolkit, ConnectionStatus
-from ..tool_registry import get_tool_registry, ToolDefinition
+from ..registry import get_tool_registry, ToolDefinition
 
 
 class ToolOverrideService:
