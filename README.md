@@ -1,6 +1,6 @@
-# Terrakit Platform
+# Terrabox Platform
 
-Terrakit Platform is a FastAPI-based backend service that provides API support for the Terrakit SDK. The platform offers core features such as user authentication, tool management, and API key management.
+Terrabox Platform is a FastAPI-based backend service that provides API support for the Terrabox SDK. The platform offers core features such as user authentication, tool management, and API key management.
 
 ## Features
 
@@ -37,7 +37,7 @@ Terrakit Platform is a FastAPI-based backend service that provides API support f
 ```bash
 # Method 1: Clone from Git repository (Recommended)
 git clone <repository-url>
-cd terrakit_platform
+cd terrabox_platform
 
 # Method 2: Download Source Archive
 # Download and extract the source archive to a local directory
@@ -66,7 +66,7 @@ pip install -e .
 pip install -e ".[dev]"
 
 # Verify installation
-python -c "import terrakit; print('Installation successful!')"
+python -c "import terrabox; print('Installation successful!')"
 ```
 
 ### Step 4: Environment Configuration
@@ -83,9 +83,9 @@ cp .env.example .env  # If the template file exists
 # Database Configuration
 # ===================
 # Use SQLite for development
-TL_DB_URL=sqlite:///./terrakit_platform.db
+TL_DB_URL=sqlite:///./terrabox_platform.db
 # Use PostgreSQL for production
-# TL_DB_URL=postgresql://username:password@localhost:5432/terrakit_db
+# TL_DB_URL=postgresql://username:password@localhost:5432/terrabox_db
 
 # ===================
 # Security Configuration
@@ -125,20 +125,20 @@ GOOGLE_OAUTH_CLIENT_SECRET=your_google_client_secret
 python scripts/init_db.py
 
 # Verify database
-python -c "from terrakit.db.session import engine; print('Database connection successful!')"
+python -c "from terrabox.db.session import engine; print('Database connection successful!')"
 ```
 
 ### Step 6: Start Service
 
 ```bash
 # Development mode (Recommended, supports hot reload)
-uvicorn src.terrakit.main:app --reload --host 0.0.0.0 --port 8000
+uvicorn terrabox.main:app --app-dir src --reload --host 0.0.0.0 --port 8000
 
 # Production mode
-uvicorn src.terrakit.main:app --host 0.0.0.0 --port 8000 --workers 4
+uvicorn terrabox.main:app --app-dir src --host 0.0.0.0 --port 8000 --workers 4
 
 # Background run
-nohup uvicorn src.terrakit.main:app --host 0.0.0.0 --port 8000 > server.log 2>&1 &
+nohup uvicorn terrabox.main:app --app-dir src --host 0.0.0.0 --port 8000 > server.log 2>&1 &
 ```
 
 ### Step 7: Verify Installation
@@ -159,7 +159,7 @@ curl http://localhost:8000/
 curl -X POST "http://localhost:8000/v1/register" \
   -H "Content-Type: application/json" \
   -d '{
-    "email": "test@example.com",
+    "email": "test_'\"$(date +%s)\"'@example.com",
     "password": "TestPassword123!"
   }'
 ```
@@ -284,7 +284,7 @@ curl -X GET "http://localhost:8000/v1/connections" \
 
 #### Install Python Client
 ```bash
-pip install terrakit-client  # If there is a standalone client package
+pip install terrabox-client  # If there is a standalone client package
 # Or use requests directly
 pip install requests
 ```
@@ -294,7 +294,7 @@ pip install requests
 import requests
 import json
 
-class TerrakitClient:
+class TerraboxClient:
     def __init__(self, base_url="http://localhost:8000", api_key=None):
         self.base_url = base_url
         self.api_key = api_key
@@ -374,7 +374,7 @@ class TerrakitClient:
         return response.json()
 
 # Usage Example
-client = TerrakitClient()
+client = TerraboxClient()
 
 # Register User
 result = client.register("user@example.com", "SecurePassword123!")
@@ -389,7 +389,7 @@ api_key_result = client.create_api_key(jwt_token, "My Python Client")
 api_key = api_key_result["key"]
 
 # Create new client using API Key
-api_client = TerrakitClient(api_key=api_key)
+api_client = TerraboxClient(api_key=api_key)
 
 # Get Tool List
 tools = api_client.list_tools()
@@ -425,8 +425,8 @@ if "id" in new_connection:
 ### Project Structure
 
 ```
-terrakit_platform/
-├── src/terrakit/
+terrabox_platform/
+├── src/terrabox/
 │   ├── main.py              # FastAPI application entry point
 │   ├── data.py              # Tool registration and management
 │   ├── extensions.py        # Extension loader
@@ -464,7 +464,7 @@ python test_security_features.py
 
 ### Adding New Tools
 
-1. Create new tool module under `src/terrakit/toolkits/`
+1. Create new tool module under `src/terrabox/toolkits/`
 2. Implement tool interface
 3. Register tool in `extensions.py`
 
@@ -499,7 +499,7 @@ COPY . .
 RUN pip install -e .
 
 EXPOSE 8000
-CMD ["uvicorn", "src.terrakit.main:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["uvicorn", "terrabox.main:app", "--host", "0.0.0.0", "--port", "8000"]
 ```
 
 ### Production Environment Configuration
@@ -565,12 +565,12 @@ pip install -e .
 #### 1. Database Connection Failed
 ```bash
 # Check database file permissions (SQLite)
-ls -la terrakit_platform.db
-chmod 664 terrakit_platform.db  # If permissions are insufficient
+ls -la terrabox_platform.db
+chmod 664 terrabox_platform.db  # If permissions are insufficient
 
 # Test database connection
 python -c "
-from terrakit.db.session import engine
+from terrabox.db.session import engine
 from sqlalchemy import text
 with engine.connect() as conn:
     result = conn.execute(text('SELECT 1'))
@@ -578,7 +578,7 @@ with engine.connect() as conn:
 "
 
 # PostgreSQL connection test
-psql -h localhost -U username -d terrakit_db -c "SELECT 1;"
+psql -h localhost -U username -d terrabox_db -c "SELECT 1;"
 ```
 
 #### 2. Port Occupied
@@ -592,14 +592,14 @@ lsof -i :8000
 kill -9 <PID>
 
 # Start with another port
-uvicorn src.terrakit.main:app --port 8001
+uvicorn terrabox.main:app --app-dir src --port 8001
 ```
 
 #### 3. JWT Token Issues
 ```bash
 # Check JWT configuration
 python -c "
-from terrakit.core.utils.config import get_settings
+from terrabox.core.utils.config import get_settings
 settings = get_settings()
 print('JWT Secret Length:', len(settings.jwt_secret))
 print('JWT Secret:', settings.jwt_secret[:10] + '...')
@@ -617,8 +617,8 @@ curl -v -X GET "http://localhost:8000/v1/tools" \
 
 # Check if API Key exists
 python -c "
-from terrakit.db.session import SessionLocal
-from terrakit.db.models import APIKey
+from terrabox.db.session import SessionLocal
+from terrabox.db.models import APIKey
 with SessionLocal() as db:
     keys = db.query(APIKey).all()
     for key in keys:
@@ -640,7 +640,7 @@ htop  # If installed
 
 # Enable debug mode to view detailed logs
 export TL_ENV=dev
-uvicorn src.terrakit.main:app --reload --log-level debug
+uvicorn terrabox.main:app --app-dir src --reload --log-level debug
 ```
 
 #### 2. High Memory Usage
@@ -649,7 +649,7 @@ uvicorn src.terrakit.main:app --reload --log-level debug
 ps aux | grep uvicorn
 
 # Reduce worker count
-uvicorn src.terrakit.main:app --workers 1
+uvicorn terrabox.main:app --app-dir src --workers 1
 
 # Use memory profiler tool
 pip install memory-profiler
@@ -678,20 +678,20 @@ echo "TL_LOG_LEVEL=DEBUG" >> .env
 
 # Or enable temporarily
 export TL_LOG_LEVEL=DEBUG
-uvicorn src.terrakit.main:app --reload
+uvicorn terrabox.main:app --app-dir src --reload
 ```
 
 #### Database Debugging
 ```bash
 # SQLite debugging
-sqlite3 terrakit_platform.db
+sqlite3 terrabox_platform.db
 .tables
 .schema users
 SELECT * FROM users LIMIT 5;
 .quit
 
 # PostgreSQL debugging
-psql -h localhost -U username -d terrakit_db
+psql -h localhost -U username -d terrabox_db
 \dt
 \d users
 SELECT * FROM users LIMIT 5;

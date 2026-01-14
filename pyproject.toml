@@ -1,5 +1,5 @@
 [project]
-name = "terrakit"
+name = "terrabox"
 version = "0.1.0"
 description = "Platform backend for the Terralink SDK"
 authors = [
@@ -8,7 +8,9 @@ authors = [
 dependencies = [
   "fastapi>=0.110",
   "uvicorn>=0.23",
+  "httpx>=0.24",
   "pydantic>=2.6",
+  "pydantic-settings>=2.0",
   "SQLAlchemy>=2.0",
   "alembic>=1.13",
   "psycopg[binary]>=3.1",
@@ -27,12 +29,15 @@ requires-python = ">=3.9"
 dev = [
   "pytest",
   "httpx",
+  "numpy",
+  "xarray",
 ]
 
 [tool.setuptools]
 package-dir = {"" = "src"}
 
 [tool.pytest.ini_options]
+pythonpath = ["src"]
 filterwarnings = [
     "ignore:'crypt' is deprecated and slated for removal in Python 3.13:DeprecationWarning:passlib.utils",
 ]

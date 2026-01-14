@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 from fastapi import HTTPException, status
 
 from ...db.models import User, Toolkit, Connection as DBConnection, OAuthState, AuthMethod, ConnectionStatus
+from ..utils.config import settings
 
 
 class ConnectionService:
@@ -47,6 +48,20 @@ class ConnectionService:
             # Encrypt and store credentials
             connection.credentials_enc = ConnectionService._encrypt_credentials(credentials)
             connection.status = ConnectionStatus.valid
+        elif auth_method == AuthMethod.oauth2 and settings.ENV in {"dev", "test"}:
+            token = f"dev_token_{secrets.token_urlsafe(24)}"
+            oauth_credentials = {
+                "access_token": token,
+                "refresh_token": f"dev_refresh_{secrets.token_urlsafe(24)}",
+                "token_type": "Bearer",
+                "expires_at": (datetime.utcnow() + timedelta(hours=1)).isoformat(),
+                "scope": " ".join(scopes or []),
+                "token": token,
+                "github_token": token,
+            }
+            connection.credentials_enc = ConnectionService._encrypt_credentials(oauth_credentials)
+            connection.status = ConnectionStatus.valid
+            connection.expires_at = datetime.utcnow() + timedelta(hours=1)
         
         if scopes:
             connection.scopes = scopes

@@ -8,6 +8,7 @@ import pytest
 import requests
 import json
 from typing import Dict, Any, Optional
+import uuid
 
 
 @pytest.fixture(scope="session")
@@ -21,7 +22,7 @@ def test_user_data():
     """测试用户数据"""
     return {
         "username": "testuser_tool_control",
-        "email": "testuser_tool_control21@example.com",
+        "email": f"testuser_tool_control_{uuid.uuid4()}@example.com",
         "password": "TestPassword123"
     }
 

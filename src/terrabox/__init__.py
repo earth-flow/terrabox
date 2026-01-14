@@ -5,4 +5,7 @@
 # and execute actions on behalf of users.  See the README for
 # usage details.
 
-from .main import create_app  # noqa: F401
+def create_app(*args, **kwargs):
+    from .main import create_app as _create_app
+
+    return _create_app(*args, **kwargs)

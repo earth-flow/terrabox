@@ -14,7 +14,7 @@ import json
 import math
 
 # Import the toolkit setup and handlers indirectly by calling setup(registrar)
-from src.terrakit.toolkits.geobasic import setup as geo_basic_setup
+from terrabox.toolkits.geobasic import setup as geo_basic_setup
 
 # -----------------------------
 # Mock Registrar (compatible with your example)

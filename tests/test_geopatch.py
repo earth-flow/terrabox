@@ -144,7 +144,7 @@ class MockRegistrar:
 # ------------------------------------------------------------------------------
 # 3) Import toolkit (register tools) and run tests with random data
 # ------------------------------------------------------------------------------
-from src.terrakit.toolkits.geopatch import setup as geopatch_setup
+from terrabox.toolkits.geopatch import setup as geopatch_setup
 
 
 def _rand_image_and_label(h=256, w=256, c=3, channel_first=True, n_classes=3):

@@ -40,7 +40,7 @@ class Registrar:
         version : str, optional
             Version of the toolkit, defaults to "1.0"
         """
-        register_toolkit(name, description)
+        register_toolkit(name, description, version)
     
     def tool(self, spec: ToolSpec, handler: Callable):
         """Register a tool with the platform.

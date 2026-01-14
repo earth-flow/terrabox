@@ -135,7 +135,7 @@ class MockRegistrar:
 # ------------------------------------------------------------------------------
 # 3) Import toolkit and perform smoke tests
 # ------------------------------------------------------------------------------
-from src.terrakit.toolkits.stac_basic import setup as stac_setup
+from terrabox.toolkits.stac_basic import setup as stac_setup
 
 def main():
     reg = MockRegistrar()

@@ -486,7 +486,7 @@ if __name__ == "__main__":
 
 def bash_execute_handler(arguments: dict, context: dict, account=None) -> Dict[str, Any]:
     """
-    Bash terminal handler function for Terrakit plugin system.
+    Bash terminal handler function for Terrabox plugin system.
     
     Args:
         arguments: Tool arguments containing bash commands
@@ -565,7 +565,7 @@ def bash_execute_handler(arguments: dict, context: dict, account=None) -> Dict[s
 
 def setup(registrar):
     """
-    Setup function for Terrakit plugin system.
+    Setup function for Terrabox plugin system.
     
     Args:
         registrar: Tool registrar to register the bash terminal tool

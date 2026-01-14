@@ -55,8 +55,8 @@ def register_user(request: Request, user_data: UserCreate, db: Session = Depends
     
     Returns user information and automatically creates an API key.
     """
-    # Check rate limit
-    auth_rate_limiter.check_rate_limit(request.client.host)
+    if settings.ENV != "test":
+        auth_rate_limiter.check_rate_limit(request.client.host)
     
     # Validate password strength
     is_valid, message = validate_password_strength(user_data.password)

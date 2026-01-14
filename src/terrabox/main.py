@@ -17,9 +17,12 @@ from .routers import analytics as analytics_router
 from .routers import async_tools as async_tools_router
 from .core.background_tasks import start_background_tasks, stop_background_tasks
 
-# MCP Integration
-from mcp.server.sse import SseServerTransport
-from .core.mcp_server import mcp_instance
+try:
+    from mcp.server.sse import SseServerTransport
+    from .core.mcp_server import mcp_instance
+except ModuleNotFoundError:
+    SseServerTransport = None
+    mcp_instance = None
 
 def init_db():
     """Initialize database tables.
@@ -90,17 +93,17 @@ def create_app() -> FastAPI:
     app.include_router(async_tools_router.gui_router)     # GUI async tools
     app.include_router(async_tools_router.batch_tools_router)  # Legacy batch tools (backward compatibility)
     
-    # MCP Server Integration (SSE)
-    sse = SseServerTransport("/mcp/messages")
+    if SseServerTransport is not None and mcp_instance is not None:
+        sse = SseServerTransport("/mcp/messages")
 
-    @app.get("/mcp/sse")
-    async def handle_sse(request: Request):
-        async with sse.connect_sse(request.scope, request.receive, request._send) as streams:
-            await mcp_instance.server.run(streams[0], streams[1], mcp_instance.server.create_initialization_options())
+        @app.get("/mcp/sse")
+        async def handle_sse(request: Request):
+            async with sse.connect_sse(request.scope, request.receive, request._send) as streams:
+                await mcp_instance.server.run(streams[0], streams[1], mcp_instance.server.create_initialization_options())
 
-    @app.post("/mcp/messages")
-    async def handle_messages(request: Request):
-        await sse.handle_post_message(request.scope, request.receive, request._send)
+        @app.post("/mcp/messages")
+        async def handle_messages(request: Request):
+            await sse.handle_post_message(request.scope, request.receive, request._send)
 
     return app
 

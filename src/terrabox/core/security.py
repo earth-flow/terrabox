@@ -130,7 +130,7 @@ class DataMasking:
         if not api_key or len(api_key) < 10:
             return "***"
         
-        # Handle terrakit format: tlk_prefix_key
+        # Handle Terralink format: tlk_<env>_<secret>
         if api_key.startswith("tlk_"):
             parts = api_key.split("_", 2)
             if len(parts) >= 3:

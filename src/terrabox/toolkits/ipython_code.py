@@ -415,7 +415,7 @@ def _parse_ipython_action(action: str) -> Tuple[str, bool]:
 
 
 def setup(registrar):
-    """Setup function for Terrakit plugin registration"""
+    """Setup function for Terrabox plugin registration"""
     
     # Register the ipython toolkit
     registrar.toolkit(

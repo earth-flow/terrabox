@@ -1,4 +1,4 @@
-# Terrakit Platform .gitignore
+# Terraskills Platform .gitignore
 
 # Python
 __pycache__/
@@ -163,7 +163,7 @@ tramp
 *.db
 *.sqlite
 *.sqlite3
-terrakit_platform.db
+terrabox_platform.db
 terralink_platform.db
 
 # Log files

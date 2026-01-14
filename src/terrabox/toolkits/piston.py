@@ -418,7 +418,7 @@ Status: {result["compile"].get("status", "Unknown")}""",
 
 
 def setup(registrar):
-    """Setup function for Terrakit plugin registration"""
+    """Setup function for Terrabox plugin registration"""
     
     # Register the piston toolkit
     registrar.toolkit(

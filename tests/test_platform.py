@@ -3,7 +3,7 @@ import pytest
 import uuid
 from fastapi.testclient import TestClient
 
-from terrakit.main import create_app
+from terrabox.main import create_app
 
 
 @pytest.fixture()

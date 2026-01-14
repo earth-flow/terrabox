@@ -167,22 +167,9 @@ class CoreRegistry:
 registry = CoreRegistry()
 
 # -----------------------------------------------------------------------------
-# Registrar Helper (for plugins)
+# Helper functions for backward compatibility or ease of use
 # -----------------------------------------------------------------------------
 
-class Registrar:
-    """Helper class passed to plugins for registration."""
-    
-    def __init__(self, registry_instance: CoreRegistry):
-        self.registry = registry_instance
-        
-    def toolkit(self, name: str, description: str, version: Optional[str] = None):
-        self.registry.register_toolkit(name, description, version)
-        
-    def tool(self, spec: ToolSpec, handler: ExecuteHandler):
-        self.registry.register_tool(spec, handler)
-
-# Helper functions for backward compatibility or ease of use
 def register_toolkit(name: str, description: str, version: Optional[str] = None) -> None:
     registry.register_toolkit(name, description, version)
 

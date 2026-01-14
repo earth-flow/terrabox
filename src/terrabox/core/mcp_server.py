@@ -2,16 +2,16 @@ import logging
 from typing import List, Any, Dict
 from mcp.server import Server
 from mcp.types import Tool, TextContent
-from terrakit.core.services import ToolService
-from terrakit.core.schemas import ExecuteRequestIn
-from terrakit.db.session import SessionLocal
-from terrakit.db import models as m
+from .services import ToolService
+from .schemas import ExecuteRequestIn
+from ..db.session import SessionLocal
+from ..db import models as m
 
 logger = logging.getLogger(__name__)
 
 class TerraKitMCPServer:
     def __init__(self):
-        self.server = Server("terrakit")
+        self.server = Server("terrabox")
         
         @self.server.list_tools()
         async def list_tools(**kwargs) -> List[Tool]:

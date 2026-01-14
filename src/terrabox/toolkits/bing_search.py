@@ -348,7 +348,7 @@ class BingSearchEngine():
 
 def bing_search_handler(arguments: dict, context: dict, account=None) -> Dict[str, Any]:
     """
-    Bing search handler function for Terrakit plugin system.
+    Bing search handler function for Terrabox plugin system.
     
     Args:
         arguments: Tool arguments containing search parameters
@@ -438,7 +438,7 @@ def setup(registrar):
     """
     Setup function for Bing Search toolkit plugin.
     
-    This function registers the Bing Search toolkit and its tools with the Terrakit plugin system.
+    This function registers the Bing Search toolkit and its tools with the Terrabox plugin system.
     
     Args:
         registrar: The registrar object used to register toolkits and tools
