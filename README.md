@@ -682,3 +682,11 @@ If the above methods cannot solve the problem, please:
 2. Create feature branch
 3. Submit changes
 4. Create Pull Request
+
+## Contact
+
+- Email: xiongzhitong@gmail.com
+
+---
+
+**Version**: 0.1.0  
