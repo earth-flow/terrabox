@@ -100,12 +100,12 @@ class BackgroundTaskManager:
         logger.info("OAuth cleanup loop stopped")
     
     async def _toolkit_discovery_loop(self):
-        """Background loop to discover and register new toolkits."""
+        """Background loop to sync toolkits to the database."""
         logger.info("Starting toolkit discovery loop")
         
         while self._running:
             try:
-                await self._discover_and_register_toolkits()
+                await self._sync_toolkits_to_db()
                 # Run every 30 minutes
                 await asyncio.sleep(1800)
             except asyncio.CancelledError:
@@ -117,63 +117,79 @@ class BackgroundTaskManager:
         
         logger.info("Toolkit discovery loop stopped")
     
-    async def _discover_and_register_toolkits(self):
-        """Discover and register new toolkits to the database."""
+    async def _sync_toolkits_to_db(self):
+        """Sync toolkits from registry to the database (add/update/remove)."""
         try:
-            # Reload plugins to discover any new toolkits
             load_builtin_toolkits()
             load_entrypoint_plugins()
             
-            # Get all available toolkits from the registry
             available_toolkits = list_toolkits()
+            available_by_key = {t.name: t for t in available_toolkits}
             
-            # Get existing toolkits from database
             db_gen = get_db()
             db = next(db_gen)
             try:
                 existing_toolkits = db.query(Toolkit).all()
-                existing_keys = {toolkit.key for toolkit in existing_toolkits}
-                
-                # Find new toolkits that are not in database
-                new_toolkits = []
-                for toolkit_info in available_toolkits:
-                    if toolkit_info.name not in existing_keys:
-                        new_toolkits.append(toolkit_info)
-                
-                # Register new toolkits to database
-                if new_toolkits:
-                    for toolkit_info in new_toolkits:
-                        await self._register_toolkit_to_db(db, toolkit_info)
-                    
-                    logger.info(f"Registered {len(new_toolkits)} new toolkits: {[t.name for t in new_toolkits]}")
+                existing_by_key = {t.key: t for t in existing_toolkits}
+
+                added = 0
+                updated = 0
+                removed = 0
+                deactivated = 0
+
+                for key, toolkit_info in available_by_key.items():
+                    existing = existing_by_key.get(key)
+                    if not existing:
+                        db.add(Toolkit(
+                            key=toolkit_info.name,
+                            name=toolkit_info.name,
+                            description=toolkit_info.description or f"Auto-discovered toolkit: {toolkit_info.name}",
+                            toolkit_type="builtin",
+                            is_active=True
+                        ))
+                        added += 1
+                        continue
+
+                    changed = False
+                    if existing.name != toolkit_info.name:
+                        existing.name = toolkit_info.name
+                        changed = True
+                    new_desc = toolkit_info.description or existing.description
+                    if new_desc != existing.description:
+                        existing.description = new_desc
+                        changed = True
+                    if not existing.is_active:
+                        existing.is_active = True
+                        changed = True
+                    if changed:
+                        updated += 1
+
+                for key, existing in existing_by_key.items():
+                    if key in available_by_key:
+                        continue
+                    has_connections = db.query(Connection.id).filter(Connection.toolkit_id == existing.id).first() is not None
+                    if has_connections:
+                        if existing.is_active:
+                            existing.is_active = False
+                            deactivated += 1
+                    else:
+                        db.delete(existing)
+                        removed += 1
+
+                if added or updated or removed or deactivated:
+                    db.commit()
+
+                if added or updated or removed or deactivated:
+                    logger.info(
+                        f"Toolkit sync: added={added}, updated={updated}, removed={removed}, deactivated={deactivated}"
+                    )
                 else:
-                    logger.debug("No new toolkits found")
+                    logger.debug("Toolkit sync: no changes")
             finally:
                 db.close()
                 
         except Exception as e:
-            logger.error(f"Error discovering and registering toolkits: {e}")
-    
-    async def _register_toolkit_to_db(self, db, toolkit_info):
-        """Register a single toolkit to the database."""
-        try:
-            # Create new toolkit record
-            new_toolkit = Toolkit(
-                key=toolkit_info.name,  # Use name as key
-                name=toolkit_info.name,
-                description=toolkit_info.description or f"Auto-discovered toolkit: {toolkit_info.name}",
-                toolkit_type="builtin",  # Set default type
-                is_active=True  # Enable by default
-            )
-            
-            db.add(new_toolkit)
-            db.commit()
-            
-            logger.info(f"Successfully registered toolkit '{toolkit_info.name}' to database")
-            
-        except Exception as e:
-            logger.error(f"Error registering toolkit '{toolkit_info.name}' to database: {e}")
-            db.rollback()
+            logger.error(f"Error syncing toolkits: {e}")
     
     async def _refresh_expiring_connections(self):
         """Refresh connections that are about to expire."""
