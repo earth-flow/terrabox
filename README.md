@@ -422,46 +422,6 @@ if "id" in new_connection:
 
 ## Development Guide
 
-### Project Structure
-
-```
-terrabox_platform/
-├── src/terrabox/
-│   ├── main.py              # FastAPI application entry point
-│   ├── data.py              # Tool registration and management
-│   ├── extensions.py        # Extension loader
-│   ├── core/                # Core business logic
-│   │   ├── schemas.py       # Pydantic data models
-│   │   ├── services/        # Business service layer
-│   │   └── utils/config.py  # Configuration management
-│   ├── db/                  # Database layer
-│   │   ├── models.py        # SQLAlchemy models
-│   │   └── session.py       # Database session
-│   ├── routers/             # API routers
-│   │   ├── auth.py          # Authentication API
-│   │   ├── api_keys.py      # API Key management
-│   │   ├── tools.py         # Tool related API
-│   │   └── connections.py   # Connection management API
-│   └── toolkits/            # Toolkits
-│       └── github.py        # GitHub toolkit
-├── tests/                   # Test files
-├── scripts/                 # Script files
-└── docs/                    # Documentation
-```
-
-### Running Tests
-
-```bash
-# Run all tests
-pytest
-
-# Run specific test
-pytest tests/test_auth.py
-
-# Run security feature tests
-python test_security_features.py
-```
-
 ### Adding New Tools
 
 1. Create new tool module under `src/terrabox/toolkits/`
@@ -726,12 +686,3 @@ If the above methods cannot solve the problem, please:
 ## License
 
 This project is licensed under the MIT License. See LICENSE file for details.
-
-## Contact
-
-- Email: xiongzhitong@gmail.com
-
----
-
-**Version**: 0.1.0  
-**Updated**: August 16, 2025
