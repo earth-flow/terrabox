@@ -682,7 +682,3 @@ If the above methods cannot solve the problem, please:
 2. Create feature branch
 3. Submit changes
 4. Create Pull Request
-
-## License
-
-This project is licensed under the MIT License. See LICENSE file for details.
