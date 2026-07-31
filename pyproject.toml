@@ -22,6 +22,7 @@ dependencies = [
   "redis>=5.0",
   "cryptography>=41.0.0",
   "PyGithub>=1.59.0",
+  "python-multipart>=0.0.9",
 ]
 requires-python = ">=3.9"
 
@@ -31,6 +32,22 @@ dev = [
   "httpx",
   "numpy",
   "xarray",
+]
+# Required by the geo_raster, geoanalysis, geo_statistics, osm_gis, geopatch,
+# and raster_viewer toolkits. Split out because they're heavy/binary-heavy
+# and not every Terrabox deployment enables those toolkits.
+geo = [
+  "rasterio",
+  "geopandas",
+  "shapely",
+  "osmnx",
+  "networkx",
+  "scipy",
+  "pandas",
+  "statsmodels",
+  "ruptures",
+  "opencv-python-headless",
+  "scikit-image",
 ]
 
 [tool.setuptools]

@@ -69,11 +69,12 @@ pip install -e ".[dev]"
 python -c "import terrabox; print('Installation successful!')"
 ```
 
-The geospatial toolkits use optional scientific/GIS packages that may not be
+The geospatial toolkits (`geo_raster`, `geoanalysis`, `geo_statistics`, `osm_gis`,
+`geopatch`, `raster_viewer`) use optional scientific/GIS packages that aren't
 installed by the platform base dependencies alone:
 
 ```bash
-pip install rasterio geopandas shapely osmnx networkx scipy pandas statsmodels ruptures opencv-python-headless scikit-image
+pip install -e ".[geo]"
 ```
 
 The AI perception tools additionally require Docker with NVIDIA GPU support and
