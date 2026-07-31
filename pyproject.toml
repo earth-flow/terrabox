@@ -1,6 +1,6 @@
 [project]
 name = "terrabox"
-version = "0.1.0"
+version = "0.1.1"
 description = "Platform backend for the Terralink SDK"
 authors = [
   { name = "Terralink", email = "xiongzhitong@gmail.com" }
