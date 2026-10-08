@@ -491,25 +491,123 @@ def get_percentile_value_handler(arguments: Dict[str, Any], context: Any, accoun
 # Raster Utilities (Threshold, Counting, Skeletonization)
 # ------------------------------------------------------------------------------
 
+_OTSU_BINS = 256
+
+
+def _otsu_threshold(values: Any, value_range: tuple) -> float:
+    """Otsu threshold over a fixed histogram range, so results are reproducible."""
+    _, np = _lazy_imports()
+    clipped = np.clip(values, *value_range)
+    counts, edges = np.histogram(clipped, bins=_OTSU_BINS, range=value_range)
+    centers = (edges[:-1] + edges[1:]) / 2
+    weight_low = np.cumsum(counts)
+    weight_high = weight_low[-1] - weight_low
+    sum_low = np.cumsum(counts * centers)
+    mean_low = np.divide(sum_low, weight_low, out=np.zeros_like(sum_low), where=weight_low > 0)
+    mean_high = np.divide(sum_low[-1] - sum_low, weight_high, out=np.zeros_like(sum_low), where=weight_high > 0)
+    between = weight_low * weight_high * (mean_low - mean_high) ** 2
+    # Empty bins between two modes form a plateau of equal variance; take its
+    # middle rather than the edge hugging the lower mode.
+    best = np.flatnonzero(between == between.max())
+    return float(edges[int(round(float(best.mean()))) + 1])
+
+
 def threshold_segmentation_handler(arguments: Dict[str, Any], context: Any, account: Any) -> Dict[str, Any]:
     """
     Binary threshold segmentation on a single-band raster image.
-    Pixels > threshold → 255 (foreground); others → 0 (background).
+
+    Defaults keep the original behaviour: pixels > threshold → 255, others → 0,
+    output nodata tag 0, no input masking. Optional arguments cover other
+    scenarios without new tools:
+      - direction: "above" (default) or "below" the threshold is foreground.
+      - input_transform: "none" (default) or "db" (10·log10, values <= 0 invalid).
+      - method: "fixed" (default) uses `threshold`; "otsu" derives it from the
+        valid pixels over `otsu_range` (in transformed units).
+      - foreground_value / background_value: output label values.
+      - nodata_value: when set, input nodata, non-finite and transform-invalid
+        pixels are written with this value and tagged as output nodata.
     """
     rasterio, np = _lazy_imports()
 
     input_path = arguments["input_path"]
-    threshold = float(arguments["threshold"])
     output_path = arguments["output_path"]
+    direction = arguments.get("direction", "above")
+    transform = arguments.get("input_transform", "none")
+    method = arguments.get("method", "fixed")
+    foreground = int(arguments.get("foreground_value", 255))
+    background = int(arguments.get("background_value", 0))
+    nodata_value = arguments.get("nodata_value")
+    if direction not in ("above", "below"):
+        raise ValueError("direction must be 'above' or 'below'")
+    if transform not in ("none", "db"):
+        raise ValueError("input_transform must be 'none' or 'db'")
+    if method not in ("fixed", "otsu"):
+        raise ValueError("method must be 'fixed' or 'otsu'")
+    if method == "fixed" and arguments.get("threshold") is None:
+        raise ValueError("threshold is required when method is 'fixed'")
+    labels = {foreground, background} | ({int(nodata_value)} if nodata_value is not None else set())
+    if min(labels) < 0 or max(labels) > 255 or len(labels) < (3 if nodata_value is not None else 2):
+        raise ValueError("foreground, background and nodata values must be distinct integers in 0..255")
 
     with rasterio.open(input_path) as src:
-        image = src.read(1).astype(np.float32)
+        band = src.read(1, masked=nodata_value is not None)
         profile = src.profile
+    if nodata_value is None:
+        image = np.asarray(band, dtype=np.float64)
+        valid = np.ones(image.shape, dtype=bool)
+    else:
+        image = np.ma.filled(band.astype(np.float64), np.nan)
+        valid = ~np.ma.getmaskarray(band) & np.isfinite(image)
+    if transform == "db":
+        positive = image > 0
+        if nodata_value is not None:
+            valid &= positive
+        image = np.where(positive, 10.0 * np.log10(np.where(positive, image, 1.0)), np.nan)
 
-    binary_image = (image > threshold).astype(np.uint8) * 255
+    valid_pixels = int(np.count_nonzero(valid))
+    if valid_pixels == 0:
+        return {
+            "success": False,
+            "execution_blocked": True,
+            "reason_code": "no_valid_pixels",
+            "failed_checks": ["no_valid_pixels"],
+        }
+    if method == "otsu":
+        default_range = (-35.0, 5.0) if transform == "db" else None
+        value_range = tuple(arguments.get("otsu_range") or default_range or (
+            float(np.nanmin(image[valid])), float(np.nanmax(image[valid]))
+        ))
+        threshold = _otsu_threshold(image[valid], value_range)
+    else:
+        threshold = float(arguments["threshold"])
 
-    _save_raster(output_path, binary_image, profile, dtype=rasterio.uint8, nodata=0)
-    return {"output_path": output_path}
+    with np.errstate(invalid="ignore"):
+        hit = image > threshold if direction == "above" else image < threshold
+    hit &= valid
+    output = np.full(image.shape, background, dtype=np.uint8)
+    output[hit] = foreground
+    if nodata_value is not None:
+        output[~valid] = int(nodata_value)
+
+    _save_raster(
+        output_path,
+        output,
+        profile,
+        dtype=rasterio.uint8,
+        nodata=int(nodata_value) if nodata_value is not None else 0,
+    )
+    foreground_pixels = int(np.count_nonzero(hit))
+    return {
+        "output_path": output_path,
+        "method": method,
+        "threshold": threshold,
+        "direction": direction,
+        "input_transform": transform,
+        "label_values": {"foreground": foreground, "background": background, "nodata": nodata_value},
+        "valid_pixels": valid_pixels,
+        "foreground_pixels": foreground_pixels,
+        "foreground_fraction": foreground_pixels / valid_pixels,
+    }
 
 
 def count_above_threshold_handler(arguments: Dict[str, Any], context: Any, account: Any) -> Dict[str, Any]:
@@ -921,15 +1019,22 @@ def setup(registrar):
         ToolSpec(
             slug="geo_raster.threshold_segmentation",
             name="Threshold Segmentation",
-            description="Binary threshold segmentation on a single-band raster. Pixels > threshold → 255; others → 0. Also serves as a general-purpose binary mask, e.g. for Fire Radiative Power (FRP) hotspot masking.",
+            description="Binary threshold segmentation on a single-band raster. By default pixels > threshold → 255 and others → 0 (e.g. FRP hotspot masks). Optional direction, dB transform, Otsu threshold, label values and nodata handling cover masks such as low-backscatter SAR water.",
             parameters={
                 "type": "object",
                 "properties": {
                     "input_path": {"type": "string", "description": "Path to input single-band raster."},
-                    "threshold": {"type": "number", "description": "Pixel intensity threshold."},
-                    "output_path": {"type": "string", "description": "Output GeoTIFF path for binary mask."}
+                    "threshold": {"type": "number", "description": "Threshold in transformed units; required unless method is 'otsu'."},
+                    "output_path": {"type": "string", "description": "Output GeoTIFF path for binary mask."},
+                    "direction": {"type": "string", "enum": ["above", "below"], "default": "above", "description": "Which side of the threshold is foreground."},
+                    "input_transform": {"type": "string", "enum": ["none", "db"], "default": "none", "description": "Apply 10*log10 before thresholding."},
+                    "method": {"type": "string", "enum": ["fixed", "otsu"], "default": "fixed"},
+                    "otsu_range": {"type": "array", "items": {"type": "number"}, "minItems": 2, "maxItems": 2, "description": "Histogram range for Otsu, in transformed units."},
+                    "foreground_value": {"type": "integer", "default": 255, "minimum": 0, "maximum": 255},
+                    "background_value": {"type": "integer", "default": 0, "minimum": 0, "maximum": 255},
+                    "nodata_value": {"type": "integer", "minimum": 0, "maximum": 255, "description": "When set, invalid input pixels get this value and it is tagged as nodata."}
                 },
-                "required": ["input_path", "threshold", "output_path"]
+                "required": ["input_path", "output_path"]
             },
             requires_connection=False
         ),

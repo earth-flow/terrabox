@@ -8,11 +8,8 @@ import numpy as np
 import rasterio
 from rasterio.transform import from_origin
 
-from terrabox.toolkits.geo_water import (
-    raster_profile_preflight_handler,
-    sar_water_mask_handler,
-    water_evidence_handler,
-)
+from terrabox.toolkits.geo_water import raster_profile_preflight_handler, water_evidence_handler
+from terrabox.toolkits.georaster import threshold_segmentation_handler
 
 
 class GeoWaterTests(unittest.TestCase):
@@ -121,31 +118,53 @@ class GeoWaterTests(unittest.TestCase):
         with rasterio.open(path, "w", **profile) as dst:
             dst.write(data, 1)
 
-    def test_sar_water_mask_otsu_labels_low_backscatter(self):
+    # Scenario preset used by the Terraflow water runner for linear SAR backscatter.
+    SAR_WATER = {
+        "direction": "below",
+        "input_transform": "db",
+        "foreground_value": 1,
+        "background_value": 0,
+        "nodata_value": 255,
+    }
+
+    def test_threshold_defaults_are_unchanged(self):
+        raster = self.root / "frp.tif"
+        out = self.root / "frp_mask.tif"
+        self._write_sar(raster, [[0.0, 2.0], [5.0, 1.0]])
+        result = threshold_segmentation_handler(
+            {"input_path": str(raster), "threshold": 1.0, "output_path": str(out)}, None, None
+        )
+        self.assertEqual(result["method"], "fixed")
+        with rasterio.open(out) as src:
+            self.assertEqual(src.read(1).tolist(), [[0, 255], [255, 0]])
+            self.assertEqual(src.nodata, 0)
+
+    def test_sar_preset_otsu_labels_low_backscatter(self):
         # Synthetic linear gamma0: 0.003 (about -25 dB) is water-like, 0.1 (-10 dB) land-like.
         sar = self.root / "sar.tif"
         out = self.root / "mask.tif"
         self._write_sar(sar, [[0.003, 0.003, 0.1], [0.1, -32768.0, 0.1]])
-        result = sar_water_mask_handler({"input_path": str(sar), "output_path": str(out)}, None, None)
-        self.assertTrue(result["success"])
+        result = threshold_segmentation_handler(
+            {"input_path": str(sar), "output_path": str(out), "method": "otsu", **self.SAR_WATER}, None, None
+        )
         self.assertEqual(result["method"], "otsu")
-        self.assertTrue(-25 < result["threshold_db"] <= -10)
+        self.assertTrue(-25 < result["threshold"] <= -10)
         self.assertEqual(result["valid_pixels"], 5)
-        self.assertEqual(result["water_pixels"], 2)
+        self.assertEqual(result["foreground_pixels"], 2)
         with rasterio.open(out) as src:
             self.assertEqual(src.nodata, 255)
             self.assertEqual(src.read(1).tolist(), [[1, 1, 0], [0, 255, 0]])
             self.assertEqual(src.crs.to_string(), "EPSG:32634")
 
-    def test_sar_water_mask_fixed_threshold_feeds_water_evidence(self):
+    def test_sar_preset_fixed_threshold_feeds_water_evidence(self):
         before_sar, after_sar = self.root / "before_sar.tif", self.root / "after_sar.tif"
         self._write_sar(before_sar, [[0.003, 0.1], [0.1, 0.1]])
         self._write_sar(after_sar, [[0.003, 0.003], [0.1, 0.003]])
         masks = []
         for name, path in (("before_mask.tif", before_sar), ("after_mask.tif", after_sar)):
             out = self.root / name
-            result = sar_water_mask_handler(
-                {"input_path": str(path), "output_path": str(out), "threshold_db": -18.0}, None, None
+            result = threshold_segmentation_handler(
+                {"input_path": str(path), "output_path": str(out), "threshold": -18.0, **self.SAR_WATER}, None, None
             )
             self.assertEqual(result["method"], "fixed")
             masks.append(str(out))
@@ -155,13 +174,27 @@ class GeoWaterTests(unittest.TestCase):
         self.assertEqual(evidence["after_water_pixels"], 3)
         self.assertAlmostEqual(evidence["new_water_area_m2"], 200.0)
 
-    def test_sar_water_mask_blocks_when_no_valid_pixels(self):
+    def test_threshold_blocks_when_no_valid_pixels(self):
         sar = self.root / "empty.tif"
         self._write_sar(sar, [[-32768.0, 0.0]])
-        result = sar_water_mask_handler({"input_path": str(sar), "output_path": str(self.root / "m.tif")}, None, None)
+        result = threshold_segmentation_handler(
+            {"input_path": str(sar), "output_path": str(self.root / "m.tif"), "method": "otsu", **self.SAR_WATER},
+            None,
+            None,
+        )
         self.assertTrue(result["execution_blocked"])
         self.assertEqual(result["reason_code"], "no_valid_pixels")
 
+    def test_threshold_rejects_ambiguous_label_values(self):
+        sar = self.root / "x.tif"
+        self._write_sar(sar, [[0.1, 0.2]])
+        with self.assertRaises(ValueError):
+            threshold_segmentation_handler(
+                {"input_path": str(sar), "output_path": str(self.root / "m.tif"), "threshold": 0.15,
+                 "foreground_value": 1, "background_value": 0, "nodata_value": 1},
+                None,
+                None,
+            )
 
 if __name__ == "__main__":
     unittest.main()
