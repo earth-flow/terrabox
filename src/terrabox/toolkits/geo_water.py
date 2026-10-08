@@ -1,4 +1,4 @@
-"""Scientific preflight and water-label evidence for aligned rasters."""
+"""Scientific preflight, SAR water masks and water-label evidence for aligned rasters."""
 
 from __future__ import annotations
 
@@ -238,10 +238,106 @@ def water_evidence_handler(arguments: dict, context: Any, account: Any) -> dict[
     }
 
 
+_SAR_LABEL_NODATA = 255
+_OTSU_RANGE_DB = (-35.0, 5.0)
+
+
+def _otsu_threshold(values, np) -> float:
+    """Otsu threshold over a fixed dB histogram range, so results are reproducible."""
+    clipped = np.clip(values, *_OTSU_RANGE_DB)
+    counts, edges = np.histogram(clipped, bins=256, range=_OTSU_RANGE_DB)
+    centers = (edges[:-1] + edges[1:]) / 2
+    weight_low = np.cumsum(counts)
+    weight_high = weight_low[-1] - weight_low
+    sum_low = np.cumsum(counts * centers)
+    mean_low = np.divide(sum_low, weight_low, out=np.zeros_like(sum_low), where=weight_low > 0)
+    mean_high = np.divide(sum_low[-1] - sum_low, weight_high, out=np.zeros_like(sum_low), where=weight_high > 0)
+    between = weight_low * weight_high * (mean_low - mean_high) ** 2
+    # Empty bins between two modes form a plateau of equal variance; take its
+    # middle rather than the edge hugging the lower mode.
+    best = np.flatnonzero(between == between.max())
+    return float(edges[int(round(float(best.mean()))) + 1])
+
+
+def sar_water_mask_handler(arguments: dict, context: Any, account: Any) -> dict[str, Any]:
+    """Label low-backscatter SAR pixels as water estimates (0/1, nodata 255)."""
+    rasterio, np = _rasterio_numpy()
+    input_path = arguments["input_path"]
+    output_path = arguments["output_path"]
+    input_scale = arguments.get("input_scale", "linear")
+    if input_scale not in ("linear", "db"):
+        return {
+            "success": False,
+            "execution_blocked": True,
+            "reason_code": "unsupported_input_scale",
+            "failed_checks": ["unsupported_input_scale"],
+        }
+    fixed_threshold = arguments.get("threshold_db")
+
+    with rasterio.open(input_path) as src:
+        band = src.read(1, masked=True)
+        profile = src.profile.copy()
+        source_profile = _profile(src)
+    values = np.ma.filled(band.astype("float64"), np.nan)
+    valid = ~np.ma.getmaskarray(band) & np.isfinite(values)
+    if input_scale == "linear":
+        valid &= values > 0
+        db = np.full(values.shape, np.nan)
+        db[valid] = 10.0 * np.log10(values[valid])
+    else:
+        db = values
+    valid_pixels = int(np.count_nonzero(valid))
+    if valid_pixels == 0:
+        return {
+            "success": False,
+            "execution_blocked": True,
+            "reason_code": "no_valid_pixels",
+            "failed_checks": ["no_valid_pixels"],
+        }
+
+    if fixed_threshold is None:
+        method = "otsu"
+        threshold_db = _otsu_threshold(db[valid], np)
+    else:
+        method = "fixed"
+        threshold_db = float(fixed_threshold)
+    water = valid & (db < threshold_db)
+    labels = np.full(values.shape, _SAR_LABEL_NODATA, dtype=np.uint8)
+    labels[valid] = 0
+    labels[water] = 1
+
+    profile.update(driver="GTiff", count=1, dtype="uint8", nodata=_SAR_LABEL_NODATA, compress="deflate")
+    Path(output_path).parent.mkdir(parents=True, exist_ok=True)
+    with rasterio.open(output_path, "w", **profile) as dst:
+        dst.write(labels, 1)
+
+    water_pixels = int(np.count_nonzero(water))
+    return {
+        "success": True,
+        "execution_blocked": False,
+        "reason_code": None,
+        "failed_checks": [],
+        "output_path": str(output_path),
+        "method": method,
+        "threshold_db": threshold_db,
+        "input_scale": input_scale,
+        "valid_pixels": valid_pixels,
+        "excluded_pixels": int(values.size - valid_pixels),
+        "water_pixels": water_pixels,
+        "water_fraction": water_pixels / valid_pixels,
+        "label_semantics": {"0": "non-water", "1": "low-backscatter water estimate", "255": "nodata"},
+        "grid": {key: source_profile[key] for key in ("shape", "crs", "transform", "resolution")},
+        "limitations": [
+            "Labels are a backscatter threshold estimate, not a reference water map.",
+            "Smooth surfaces such as tarmac, sand or radar shadow can also fall below the threshold.",
+        ],
+    }
+
+
 def setup(registrar) -> None:
     registrar.toolkit(
         name="geo_water",
-        description="Scientific grid preflight and area statistics for paired semantic water-label rasters.",
+        description="Scientific grid preflight, SAR water masks and area statistics for paired water rasters.",
         version="0.1.0",
     )
     registrar.tool(
@@ -281,4 +377,23 @@ def setup(registrar) -> None:
             requires_connection=False,
         ),
         water_evidence_handler,
+    )
+    registrar.tool(
+        ToolSpec(
+            slug="geo_water.sar_water_mask",
+            name="SAR Water Mask",
+            description="Label low-backscatter pixels of a single-band SAR raster as water estimates. Writes 0=non-water, 1=water, 255=nodata on the input grid, using an Otsu or fixed dB threshold.",
+            parameters={
+                "type": "object",
+                "properties": {
+                    "input_path": {"type": "string", "description": "Single-band SAR backscatter raster."},
+                    "output_path": {"type": "string", "description": "Output GeoTIFF path for the 0/1 label raster."},
+                    "input_scale": {"type": "string", "enum": ["linear", "db"], "default": "linear"},
+                    "threshold_db": {"type": "number", "description": "Fixed threshold in dB; omit to use Otsu."},
+                },
+                "required": ["input_path", "output_path"],
+            },
+            requires_connection=False,
+        ),
+        sar_water_mask_handler,
     )
