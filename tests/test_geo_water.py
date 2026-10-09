@@ -8,7 +8,11 @@ import numpy as np
 import rasterio
 from rasterio.transform import from_origin
 
-from terrabox.toolkits.geo_water import raster_profile_preflight_handler, water_evidence_handler
+from terrabox.toolkits.geo_water import (
+    raster_profile_preflight_handler,
+    water_evidence_handler,
+    water_extent_handler,
+)
 from terrabox.toolkits.georaster import threshold_segmentation_handler
 
 
@@ -102,6 +106,43 @@ class GeoWaterTests(unittest.TestCase):
         self.assertEqual(result["reason_code"], "unsupported_area_crs")
         self.assertTrue(result["execution_blocked"])
 
+
+    def test_water_evidence_rejects_web_mercator_area(self):
+        mercator = from_origin(2450000, 4790000, 10, 10)
+        self._write(self.before, [[0, 1], [0, 0]], crs="EPSG:3857", transform=mercator)
+        self._write(self.after, [[1, 1], [0, 1]], crs="EPSG:3857", transform=mercator)
+        result = water_evidence_handler(self._args(), None, None)
+        self.assertEqual(result["reason_code"], "area_distorting_projection")
+        self.assertTrue(result["execution_blocked"])
+        self.assertFalse(result["change_answerable"])
+
+    def test_water_extent_counts_valid_pixels_only(self):
+        self._write(self.after, [[1, 255], [0, 1]])
+        result = water_extent_handler({"label_path": str(self.after)}, None, None)
+        self.assertTrue(result["success"])
+        self.assertEqual(result["valid_pixels"], 3)
+        self.assertEqual(result["excluded_pixels"], 1)
+        self.assertEqual(result["water_pixels"], 2)
+        self.assertEqual(result["pixel_area_m2"], 100)
+        self.assertEqual(result["water_area_m2"], 200)
+        self.assertEqual(result["valid_area_m2"], 300)
+        self.assertAlmostEqual(result["water_fraction"], 2 / 3)
+        self.assertEqual(result["projection_method"], "Transverse Mercator")
+
+    def test_water_extent_blocks_invalid_labels_and_bad_area_grids(self):
+        self._write(self.after, [[0, 2], [0, 1]])
+        result = water_extent_handler({"label_path": str(self.after)}, None, None)
+        self.assertEqual(result["reason_code"], "invalid_water_labels")
+        self._write(self.after, [[0, 1], [0, 1]], crs="EPSG:4326", transform=from_origin(22.0, 39.5, 0.0001, 0.0001))
+        result = water_extent_handler({"label_path": str(self.after)}, None, None)
+        self.assertEqual(result["reason_code"], "unsupported_area_crs")
+        self._write(self.after, [[0, 1], [0, 1]], crs="EPSG:3857", transform=from_origin(2450000, 4790000, 10, 10))
+        result = water_extent_handler({"label_path": str(self.after)}, None, None)
+        self.assertEqual(result["reason_code"], "area_distorting_projection")
+        self.assertTrue(result["execution_blocked"])
+        self._write(self.after, [[255, 255], [255, 255]])
+        result = water_extent_handler({"label_path": str(self.after)}, None, None)
+        self.assertEqual(result["reason_code"], "no_valid_pixels")
 
     def _write_sar(self, path, values, nodata=-32768.0):
         data = np.asarray(values, dtype=np.float32)

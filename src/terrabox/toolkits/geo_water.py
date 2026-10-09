@@ -1,4 +1,4 @@
-"""Scientific preflight and water-label evidence for aligned rasters."""
+"""Scientific preflight and water-label evidence for aligned rasters and single scenes."""
 
 from __future__ import annotations
 
@@ -55,6 +55,47 @@ def _grid_id(profile: dict[str, Any]) -> str:
     }
     digest = hashlib.sha256(json.dumps(canonical, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
     return f"grid:{digest[:16]}"
+
+
+# Projections whose scale grows with latitude (area factor sec^2 of latitude):
+# pixel counts times the nominal pixel area misstate ground area, often by tens
+# of percent. Transverse Mercator (UTM) is not in this family.
+_AREA_DISTORTING_METHODS = (
+    "popular visualisation pseudo mercator",
+    "mercator (variant a)",
+    "mercator (variant b)",
+    "mercator (variant c)",
+    "mercator (spherical)",
+    "mercator",
+)
+
+
+def _area_support(crs, transform) -> dict[str, Any]:
+    """Nominal per-pixel ground area, or the reason it cannot be used.
+
+    Requires a projected CRS with linear axis units and a projection that does
+    not scale area with latitude. Geographic (degree) grids are refused rather
+    than squaring an angular pixel size.
+    """
+    if crs is None or not crs.is_projected:
+        return {"reason_code": "unsupported_area_crs", "crs": crs.to_string() if crs else None}
+    try:
+        from pyproj import CRS
+    except ImportError as exc:
+        raise ImportError("geo_water area calculation requires pyproj from the Terrabox geo dependencies") from exc
+    projected = CRS.from_user_input(crs)
+    operation = projected.coordinate_operation
+    method = operation.method_name if operation is not None else None
+    if method and method.strip().lower() in _AREA_DISTORTING_METHODS:
+        return {"reason_code": "area_distorting_projection", "crs": crs.to_string(), "projection_method": method}
+    axes = projected.axis_info
+    if len(axes) < 2 or not all(axis.unit_conversion_factor for axis in axes[:2]):
+        return {"reason_code": "unsupported_area_units", "crs": crs.to_string(), "projection_method": method}
+    pixel_area_m2 = abs(transform.a * transform.e - transform.b * transform.d)
+    pixel_area_m2 *= axes[0].unit_conversion_factor * axes[1].unit_conversion_factor
+    if not math.isfinite(pixel_area_m2) or pixel_area_m2 <= 0:
+        return {"reason_code": "invalid_pixel_area", "crs": crs.to_string(), "projection_method": method}
+    return {"reason_code": None, "crs": crs.to_string(), "projection_method": method, "pixel_area_m2": pixel_area_m2}
 
 
 def _pair_preflight(before_path: str, after_path: str, before_grid_id: str | None = None,
@@ -158,44 +199,19 @@ def water_evidence_handler(arguments: dict, context: Any, account: Any) -> dict[
                 "change_answerable": False,
             }
 
-        crs = before.crs
-        if crs is None or not crs.is_projected:
+        area = _area_support(before.crs, before.transform)
+        if area.get("reason_code"):
             return {
                 "success": False,
                 "execution_blocked": True,
-                "reason_code": "unsupported_area_crs",
-                "failed_checks": ["unsupported_area_crs"],
+                "reason_code": area["reason_code"],
+                "failed_checks": [area["reason_code"]],
                 "semantic_class": "water_not_flood",
                 "change_answerable": False,
-                "crs": crs.to_string() if crs else None,
+                "crs": area.get("crs"),
+                "projection_method": area.get("projection_method"),
             }
-
-        try:
-            from pyproj import CRS
-            axes = CRS.from_user_input(crs).axis_info
-        except ImportError as exc:
-            raise ImportError("geo_water area calculation requires pyproj from the Terrabox geo dependencies") from exc
-        if len(axes) < 2 or not all(axis.unit_conversion_factor for axis in axes[:2]):
-            return {
-                "success": False,
-                "execution_blocked": True,
-                "reason_code": "unsupported_area_units",
-                "failed_checks": ["unsupported_area_units"],
-                "semantic_class": "water_not_flood",
-                "change_answerable": False,
-            }
-        transform = before.transform
-        pixel_area_m2 = abs(transform.a * transform.e - transform.b * transform.d)
-        pixel_area_m2 *= axes[0].unit_conversion_factor * axes[1].unit_conversion_factor
-        if not math.isfinite(pixel_area_m2) or pixel_area_m2 <= 0:
-            return {
-                "success": False,
-                "execution_blocked": True,
-                "reason_code": "invalid_pixel_area",
-                "failed_checks": ["invalid_pixel_area"],
-                "semantic_class": "water_not_flood",
-                "change_answerable": False,
-            }
+        pixel_area_m2 = area["pixel_area_m2"]
 
         valid_pixels = int(np.count_nonzero(valid))
         total_pixels = int(valid.size)
@@ -219,6 +235,7 @@ def water_evidence_handler(arguments: dict, context: Any, account: Any) -> dict[
         "crs": before_profile["crs"],
         "transform": before_profile["transform"],
         "area_method": "affine_pixel_area_with_projected_crs_unit_conversion",
+        "projection_method": area["projection_method"],
         "pixel_area_m2": pixel_area_m2,
         "valid_pixels": valid_pixels,
         "excluded_pixels": total_pixels - valid_pixels,
@@ -238,10 +255,68 @@ def water_evidence_handler(arguments: dict, context: Any, account: Any) -> dict[
     }
 
 
+def water_extent_handler(arguments: dict, context: Any, account: Any) -> dict[str, Any]:
+    """Water area of one 0/1 semantic water-label raster over its valid pixels."""
+    rasterio, np = _rasterio_numpy()
+    label_path = arguments["label_path"]
+    with rasterio.open(label_path) as src:
+        data = src.read(1)
+        dataset_valid = src.dataset_mask() > 0
+        label_valid = np.isfinite(data) & np.isin(data, (0, 1))
+        invalid_labels = int(np.count_nonzero(dataset_valid & ~label_valid))
+        profile = _profile(src)
+        area = _area_support(src.crs, src.transform)
+    blocked = {"semantic_class": "water_not_flood", "extent_answerable": False, "crs": profile["crs"]}
+    if profile["count"] != 1:
+        return {**blocked, "success": False, "execution_blocked": True,
+                "reason_code": "unsupported_band_count", "failed_checks": ["unsupported_band_count"]}
+    if invalid_labels:
+        return {**blocked, "success": False, "execution_blocked": True, "reason_code": "invalid_water_labels",
+                "failed_checks": ["invalid_water_labels"], "invalid_label_pixels": invalid_labels}
+    if area.get("reason_code"):
+        return {**blocked, "success": False, "execution_blocked": True, "reason_code": area["reason_code"],
+                "failed_checks": [area["reason_code"]], "projection_method": area.get("projection_method")}
+    valid = dataset_valid & label_valid
+    valid_pixels = int(np.count_nonzero(valid))
+    total_pixels = int(valid.size)
+    if valid_pixels == 0:
+        return {**blocked, "success": False, "execution_blocked": True,
+                "reason_code": "no_valid_pixels", "failed_checks": ["no_valid_pixels"]}
+    water_pixels = int(np.count_nonzero(valid & (data == 1)))
+    pixel_area_m2 = area["pixel_area_m2"]
+    return {
+        "success": True,
+        "execution_blocked": False,
+        "reason_code": None,
+        "failed_checks": [],
+        "semantic_class": "water_not_flood",
+        "support": "valid_pixels_of_scene",
+        "source_id": str(Path(label_path)),
+        "grid_id": _grid_id(profile),
+        "crs": profile["crs"],
+        "transform": profile["transform"],
+        "resolution": profile["resolution"],
+        "area_method": "affine_pixel_area_with_projected_crs_unit_conversion",
+        "projection_method": area["projection_method"],
+        "pixel_area_m2": pixel_area_m2,
+        "valid_pixels": valid_pixels,
+        "excluded_pixels": total_pixels - valid_pixels,
+        "valid_area_m2": valid_pixels * pixel_area_m2,
+        "water_pixels": water_pixels,
+        "water_area_m2": water_pixels * pixel_area_m2,
+        "water_fraction": water_pixels / valid_pixels,
+        "extent_answerable": True,
+        "limitations": [
+            "Statistics describe supplied 0/1 water labels, not flood extent or segmentation accuracy.",
+            "One scene shows water at one time; it does not show change or inundation.",
+        ],
+    }
+
+
 def setup(registrar) -> None:
     registrar.toolkit(
         name="geo_water",
-        description="Scientific grid preflight and area statistics for paired semantic water-label rasters.",
+        description="Scientific grid preflight and area statistics for semantic water-label rasters (paired or single scene).",
         version="0.1.0",
     )
     registrar.tool(
@@ -281,4 +356,18 @@ def setup(registrar) -> None:
             requires_connection=False,
         ),
         water_evidence_handler,
+    )
+    registrar.tool(
+        ToolSpec(
+            slug="geo_water.water_extent",
+            name="Water Label Extent",
+            description="Compute water area of one semantic water-label raster (0=non-water, 1=water, nodata masked) over its valid pixels. Blocks geographic grids and area-distorting projections.",
+            parameters={
+                "type": "object",
+                "properties": {"label_path": {"type": "string"}},
+                "required": ["label_path"],
+            },
+            requires_connection=False,
+        ),
+        water_extent_handler,
     )
