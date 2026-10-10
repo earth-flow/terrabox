@@ -9,7 +9,9 @@ import rasterio
 from rasterio.transform import from_origin
 
 from terrabox.toolkits.geo_water import (
+    compare_with_reference_handler,
     raster_profile_preflight_handler,
+    water_by_class_handler,
     water_evidence_handler,
     water_extent_handler,
 )
@@ -236,6 +238,121 @@ class GeoWaterTests(unittest.TestCase):
                 None,
                 None,
             )
+
+
+class WaterByClassAndReferenceTests(unittest.TestCase):
+    """Synthetic 3x3 rasters on a 10 m UTM grid (100 m2 per pixel)."""
+
+    CLASSES = [
+        {"value": 0, "name": "no_data", "nodata": True},
+        {"value": 40, "name": "cropland", "title": "耕地"},
+        {"value": 50, "name": "built_up", "title": "建设用地"},
+    ]
+
+    def setUp(self):
+        self.temp_dir = tempfile.TemporaryDirectory()
+        self.root = Path(self.temp_dir.name)
+
+    def tearDown(self):
+        self.temp_dir.cleanup()
+
+    def _write(self, name, values, *, crs="EPSG:32634", nodata=255, transform=None):
+        path = self.root / name
+        data = np.asarray(values, dtype=np.uint8)
+        with rasterio.open(
+            path, "w", driver="GTiff", height=data.shape[0], width=data.shape[1], count=1, dtype="uint8",
+            crs=crs, transform=transform or from_origin(586300, 4382310, 10, 10), nodata=nodata,
+        ) as dst:
+            dst.write(data, 1)
+        return str(path)
+
+    def _class_args(self, classes_values, **extra):
+        return {
+            "before_path": self._write("before.tif", [[0, 0, 1], [0, 0, 0], [0, 0, 0]]),
+            "after_path": self._write("after.tif", [[1, 1, 1], [1, 0, 0], [0, 0, 255]]),
+            "class_path": self._write("classes.tif", classes_values, nodata=None),
+            "classes": self.CLASSES,
+            **extra,
+        }
+
+    def test_new_water_by_class(self):
+        args = self._class_args([[40, 40, 40], [50, 50, 50], [40, 0, 40]], output_path=str(self.root / "o.tif"))
+        result = water_by_class_handler(args, None, None)
+        self.assertTrue(result["class_answerable"])
+        rows = {row["name"]: row for row in result["classes"]}
+        # valid: 9 pixels minus after-nodata (2,2) minus class nodata (2,1) = 7
+        self.assertEqual(result["valid_pixels"], 7)
+        self.assertEqual(rows["cropland"]["class_area_m2"], 400)
+        self.assertEqual(rows["cropland"]["new_water_area_m2"], 200)
+        self.assertEqual(rows["built_up"]["new_water_area_m2"], 100)
+        self.assertAlmostEqual(rows["cropland"]["share_of_new_water"], 2 / 3)
+        with rasterio.open(args["output_path"]) as src:
+            self.assertEqual(src.read(1).tolist(), [[40, 40, 0], [50, 0, 0], [0, 255, 255]])
+
+    def test_undeclared_class_value_blocks(self):
+        result = water_by_class_handler(self._class_args([[40, 37, 40], [50, 50, 50], [40, 0, 40]]), None, None)
+        self.assertTrue(result["execution_blocked"])
+        self.assertEqual(result["reason_code"], "undeclared_class_values")
+        self.assertEqual(result["undeclared_values"], [37])
+
+    def test_class_grid_mismatch_blocks(self):
+        args = self._class_args([[40, 40, 40], [50, 50, 50], [40, 0, 40]])
+        args["class_path"] = self._write("shifted.tif", [[40] * 3] * 3, nodata=None,
+                                         transform=from_origin(586310, 4382310, 10, 10))
+        result = water_by_class_handler(args, None, None)
+        self.assertEqual(result["reason_code"], "transform_mismatch")
+
+    def test_geographic_class_grid_blocks_area(self):
+        transform = from_origin(22.0, 39.5, 0.0001, 0.0001)
+        args = {
+            "after_path": self._write("a.tif", [[1, 0]], crs="EPSG:4326", transform=transform),
+            "class_path": self._write("c.tif", [[40, 40]], crs="EPSG:4326", transform=transform, nodata=None),
+            "classes": self.CLASSES,
+        }
+        self.assertEqual(water_by_class_handler(args, None, None)["reason_code"], "unsupported_area_crs")
+
+    def test_compare_with_reference(self):
+        predicted = self._write("p.tif", [[1, 1, 0], [0, 1, 0], [0, 0, 255]])
+        reference = self._write("r.tif", [[1, 0, 1], [0, 1, 0], [0, 0, 0]])
+        result = compare_with_reference_handler(
+            {"predicted_path": predicted, "reference_path": reference, "output_path": str(self.root / "c.tif")},
+            None, None,
+        )
+        self.assertEqual((result["true_positive_pixels"], result["false_positive_pixels"],
+                          result["false_negative_pixels"], result["true_negative_pixels"]), (2, 1, 1, 4))
+        self.assertAlmostEqual(result["precision"], 2 / 3)
+        self.assertAlmostEqual(result["recall"], 2 / 3)
+        self.assertAlmostEqual(result["iou"], 0.5)
+        self.assertEqual(result["agreement_area_m2"], 200)
+        with rasterio.open(result["output_path"]) as src:
+            self.assertEqual(src.read(1).tolist(), [[1, 2, 3], [0, 1, 0], [0, 0, 255]])
+
+    def test_compare_rejects_non_binary_reference(self):
+        predicted = self._write("p.tif", [[1, 0]])
+        reference = self._write("r.tif", [[2, 0]])
+        result = compare_with_reference_handler({"predicted_path": predicted, "reference_path": reference}, None, None)
+        self.assertEqual(result["reason_code"], "invalid_water_labels")
+
+    def test_preflight_treats_nan_nodata_as_equal(self):
+        paths = []
+        for name in ("a.tif", "b.tif"):
+            path = self.root / name
+            with rasterio.open(path, "w", driver="GTiff", height=1, width=2, count=1, dtype="float32",
+                               crs="EPSG:32634", transform=from_origin(586300, 4382310, 10, 10),
+                               nodata=float("nan")) as dst:
+                dst.write(np.array([[0.1, np.nan]], dtype="float32"), 1)
+            paths.append(str(path))
+        result = raster_profile_preflight_handler({"before_path": paths[0], "after_path": paths[1]}, None, None)
+        self.assertFalse(result["execution_blocked"])
+        self.assertIsNone(result["reason_code"])
+
+    def test_compare_blocks_web_mercator(self):
+        transform = from_origin(2450000, 4790000, 10, 10)
+        predicted = self._write("p.tif", [[1, 0]], crs="EPSG:3857", transform=transform)
+        reference = self._write("r.tif", [[1, 0]], crs="EPSG:3857", transform=transform)
+        result = compare_with_reference_handler({"predicted_path": predicted, "reference_path": reference}, None, None)
+        self.assertEqual(result["reason_code"], "area_distorting_projection")
+
 
 if __name__ == "__main__":
     unittest.main()

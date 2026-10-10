@@ -98,6 +98,17 @@ def _area_support(crs, transform) -> dict[str, Any]:
     return {"reason_code": None, "crs": crs.to_string(), "projection_method": method, "pixel_area_m2": pixel_area_m2}
 
 
+def _same_nodata(first: list[Any], second: list[Any]) -> bool:
+    """Nodata lists are equal when every value matches; NaN equals NaN (a common float nodata)."""
+    if len(first) != len(second):
+        return False
+    for a, b in zip(first, second):
+        both_nan = isinstance(a, float) and isinstance(b, float) and math.isnan(a) and math.isnan(b)
+        if not both_nan and a != b:
+            return False
+    return True
+
+
 def _pair_preflight(before_path: str, after_path: str, before_grid_id: str | None = None,
                     after_grid_id: str | None = None) -> dict[str, Any]:
     rasterio, np = _rasterio_numpy()
@@ -122,7 +133,10 @@ def _pair_preflight(before_path: str, after_path: str, before_grid_id: str | Non
             ("nodata", "nodata_mismatch"),
         )
         for field, reason in comparisons:
-            if before_profile[field] != after_profile[field]:
+            if field == "nodata":
+                if not _same_nodata(before_profile[field], after_profile[field]):
+                    differences.append(reason)
+            elif before_profile[field] != after_profile[field]:
                 differences.append(reason)
 
         if before.count < 1 or after.count < 1:
@@ -313,10 +327,230 @@ def water_extent_handler(arguments: dict, context: Any, account: Any) -> dict[st
     }
 
 
+def _same_grid(paths: dict[str, str]) -> dict[str, Any]:
+    """Shape, CRS and transform of every raster must match; nodata may differ (labels vs classes)."""
+    rasterio, _ = _rasterio_numpy()
+    profiles = {}
+    for role, path in paths.items():
+        with rasterio.open(path) as src:
+            profiles[role] = _profile(src)
+    first = next(iter(profiles.values()))
+    failed = []
+    for field, reason in (("shape", "shape_mismatch"), ("crs", "crs_mismatch"), ("transform", "transform_mismatch")):
+        if any(profile[field] != first[field] for profile in profiles.values()):
+            failed.append(reason)
+    failed += ["unsupported_band_count"] if any(profile["count"] != 1 for profile in profiles.values()) else []
+    return {"failed_checks": failed, "profiles": profiles, "grid_id": _grid_id(first)}
+
+
+def _blocked(reason: str, **extra: Any) -> dict[str, Any]:
+    return {"success": False, "execution_blocked": True, "reason_code": reason, "failed_checks": [reason], **extra}
+
+
+def _read_labels(src, np) -> tuple[Any, Any, int]:
+    """0/1 water labels: data, valid mask, and the number of valid pixels that are not 0 or 1."""
+    data = src.read(1)
+    dataset_valid = src.dataset_mask() > 0
+    label_valid = np.isfinite(data) & np.isin(data, (0, 1))
+    return data, dataset_valid & label_valid, int(np.count_nonzero(dataset_valid & ~label_valid))
+
+
+def water_by_class_handler(arguments: dict, context: Any, account: Any) -> dict[str, Any]:
+    """Water (and, with a before mask, new water) area inside each class of an aligned class raster."""
+    rasterio, np = _rasterio_numpy()
+    paths = {"after": arguments["after_path"], "classes": arguments["class_path"]}
+    if arguments.get("before_path"):
+        paths["before"] = arguments["before_path"]
+    classes = arguments.get("classes") or []
+    if isinstance(classes, str):
+        classes = json.loads(classes)
+    declared = {int(entry["value"]): entry for entry in classes}
+    nodata_values = {value for value, entry in declared.items() if entry.get("nodata")}
+    grid = _same_grid(paths)
+    semantic = {"semantic_class": "water_not_flood", "class_answerable": False}
+    if grid["failed_checks"]:
+        reason = grid["failed_checks"][0]
+        return {**_blocked(reason), **semantic, "failed_checks": grid["failed_checks"]}
+    with rasterio.open(paths["classes"]) as src:
+        class_data = src.read(1)
+        class_valid = src.dataset_mask() > 0
+        area = _area_support(src.crs, src.transform)
+        crs = src.crs.to_string() if src.crs else None
+        transform = list(src.transform)[:6]
+    if not declared:
+        return {**_blocked("missing_class_table"), **semantic}
+    present = set(np.unique(class_data[class_valid]).tolist())
+    undeclared = sorted(int(v) for v in present - set(declared))
+    if undeclared:
+        return {**_blocked("undeclared_class_values", undeclared_values=undeclared[:20]), **semantic}
+    if area.get("reason_code"):
+        return {**_blocked(area["reason_code"], crs=area.get("crs"), projection_method=area.get("projection_method")),
+                **semantic}
+    valid = class_valid & ~np.isin(class_data, list(nodata_values))
+    masks = {}
+    for role in ("after", "before"):
+        if role not in paths:
+            continue
+        with rasterio.open(paths[role]) as src:
+            data, label_valid, invalid = _read_labels(src, np)
+        if invalid:
+            return {**_blocked("invalid_water_labels", invalid_label_pixels=invalid, role=role), **semantic}
+        masks[role] = data
+        valid &= label_valid
+    valid_pixels = int(np.count_nonzero(valid))
+    if valid_pixels == 0:
+        return {**_blocked("no_valid_pixels"), **semantic}
+    pixel_area_m2 = area["pixel_area_m2"]
+    after_water = valid & (masks["after"] == 1)
+    new_water = valid & (masks["before"] == 0) & (masks["after"] == 1) if "before" in masks else None
+    rows = []
+    for value, entry in sorted(declared.items()):
+        if value in nodata_values:
+            continue
+        inside = valid & (class_data == value)
+        pixels = int(np.count_nonzero(inside))
+        if pixels == 0:
+            continue
+        row = {
+            "value": value,
+            "name": entry.get("name"),
+            "title": entry.get("title") or entry.get("name"),
+            "class_area_m2": pixels * pixel_area_m2,
+            "water_area_m2": int(np.count_nonzero(inside & after_water)) * pixel_area_m2,
+        }
+        if new_water is not None:
+            row["new_water_area_m2"] = int(np.count_nonzero(inside & new_water)) * pixel_area_m2
+            row["new_water_fraction_of_class"] = row["new_water_area_m2"] / row["class_area_m2"]
+        rows.append(row)
+    total_new = int(np.count_nonzero(new_water)) * pixel_area_m2 if new_water is not None else None
+    for row in rows:
+        if total_new:
+            row["share_of_new_water"] = row["new_water_area_m2"] / total_new
+    output_path = arguments.get("output_path")
+    if output_path:
+        # Class value where (new) water is, 0 elsewhere, 255 outside the valid support.
+        target = new_water if new_water is not None else after_water
+        layer = np.where(valid, np.where(target, class_data, 0), 255).astype("uint8")
+        with rasterio.open(paths["classes"]) as src:
+            profile = src.profile.copy()
+        profile.update(dtype="uint8", count=1, nodata=255, compress="deflate")
+        with rasterio.open(output_path, "w", **profile) as dst:
+            dst.write(layer, 1)
+    return {
+        "success": True,
+        "execution_blocked": False,
+        "reason_code": None,
+        "failed_checks": [],
+        "semantic_class": "water_not_flood",
+        "support": "valid_pixels_of_all_inputs",
+        "grid_id": grid["grid_id"],
+        "crs": crs,
+        "transform": transform,
+        "area_method": "affine_pixel_area_with_projected_crs_unit_conversion",
+        "projection_method": area["projection_method"],
+        "pixel_area_m2": pixel_area_m2,
+        "valid_pixels": valid_pixels,
+        "valid_area_m2": valid_pixels * pixel_area_m2,
+        "water_area_m2": int(np.count_nonzero(after_water)) * pixel_area_m2,
+        "new_water_area_m2": total_new,
+        "classes": rows,
+        "output_path": output_path,
+        "class_answerable": True,
+        "limitations": [
+            "Areas describe supplied 0/1 water labels intersected with a supplied class raster; both carry their own errors.",
+            "Class rasters resampled onto the label grid (nearest neighbour) keep class codes but shift class edges.",
+        ],
+    }
+
+
+def compare_with_reference_handler(arguments: dict, context: Any, account: Any) -> dict[str, Any]:
+    """Agreement between a predicted 0/1 water raster and an aligned 0/1 reference raster."""
+    rasterio, np = _rasterio_numpy()
+    paths = {"predicted": arguments["predicted_path"], "reference": arguments["reference_path"]}
+    grid = _same_grid(paths)
+    semantic = {"semantic_class": "water_not_flood", "comparison_answerable": False}
+    if grid["failed_checks"]:
+        return {**_blocked(grid["failed_checks"][0]), **semantic, "failed_checks": grid["failed_checks"]}
+    data, valid = {}, None
+    for role, path in paths.items():
+        with rasterio.open(path) as src:
+            values, label_valid, invalid = _read_labels(src, np)
+            if role == "predicted":
+                area = _area_support(src.crs, src.transform)
+                crs = src.crs.to_string() if src.crs else None
+                profile = src.profile.copy()
+        if invalid:
+            return {**_blocked("invalid_water_labels", invalid_label_pixels=invalid, role=role), **semantic}
+        data[role] = values
+        valid = label_valid if valid is None else valid & label_valid
+    if area.get("reason_code"):
+        return {**_blocked(area["reason_code"], crs=area.get("crs"), projection_method=area.get("projection_method")),
+                **semantic}
+    valid_pixels = int(np.count_nonzero(valid))
+    if valid_pixels == 0:
+        return {**_blocked("no_valid_pixels"), **semantic}
+    predicted, reference = data["predicted"] == 1, data["reference"] == 1
+    tp = int(np.count_nonzero(valid & predicted & reference))
+    fp = int(np.count_nonzero(valid & predicted & ~reference))
+    fn = int(np.count_nonzero(valid & ~predicted & reference))
+    tn = valid_pixels - tp - fp - fn
+
+    def ratio(numerator: int, denominator: int) -> float | None:
+        return numerator / denominator if denominator else None
+
+    output_path = arguments.get("output_path")
+    if output_path:
+        # 0 both non-water, 1 both water, 2 predicted only, 3 reference only, 255 invalid.
+        layer = np.full(predicted.shape, 255, dtype="uint8")
+        layer[valid] = 0
+        layer[valid & predicted & reference] = 1
+        layer[valid & predicted & ~reference] = 2
+        layer[valid & ~predicted & reference] = 3
+        profile.update(dtype="uint8", count=1, nodata=255, compress="deflate")
+        with rasterio.open(output_path, "w", **profile) as dst:
+            dst.write(layer, 1)
+    pixel_area_m2 = area["pixel_area_m2"]
+    return {
+        "success": True,
+        "execution_blocked": False,
+        "reason_code": None,
+        "failed_checks": [],
+        "semantic_class": "water_not_flood",
+        "support": "common_valid_pixels",
+        "grid_id": grid["grid_id"],
+        "crs": crs,
+        "area_method": "affine_pixel_area_with_projected_crs_unit_conversion",
+        "projection_method": area["projection_method"],
+        "pixel_area_m2": pixel_area_m2,
+        "valid_pixels": valid_pixels,
+        "valid_area_m2": valid_pixels * pixel_area_m2,
+        "predicted_water_area_m2": (tp + fp) * pixel_area_m2,
+        "reference_water_area_m2": (tp + fn) * pixel_area_m2,
+        "agreement_area_m2": tp * pixel_area_m2,
+        "predicted_only_area_m2": fp * pixel_area_m2,
+        "reference_only_area_m2": fn * pixel_area_m2,
+        "true_positive_pixels": tp,
+        "false_positive_pixels": fp,
+        "false_negative_pixels": fn,
+        "true_negative_pixels": tn,
+        "precision": ratio(tp, tp + fp),
+        "recall": ratio(tp, tp + fn),
+        "f1": ratio(2 * tp, 2 * tp + fp + fn),
+        "iou": ratio(tp, tp + fp + fn),
+        "overall_accuracy": (tp + tn) / valid_pixels,
+        "output_path": output_path,
+        "comparison_answerable": True,
+        "limitations": [
+            "Agreement with a reference product is not accuracy unless the reference is validated ground truth.",
+            "Differences in acquisition date, sensor and mapping method between prediction and reference count as disagreement.",
+        ],
+    }
+
+
 def setup(registrar) -> None:
     registrar.toolkit(
         name="geo_water",
-        description="Scientific grid preflight and area statistics for semantic water-label rasters (paired or single scene).",
+        description="Scientific grid preflight and area statistics for semantic water-label rasters (paired or single scene, by class, against a reference).",
         version="0.1.0",
     )
     registrar.tool(
@@ -370,4 +604,42 @@ def setup(registrar) -> None:
             requires_connection=False,
         ),
         water_extent_handler,
+    )
+    registrar.tool(
+        ToolSpec(
+            slug="geo_water.water_by_class",
+            name="Water Area by Class",
+            description="Water area (and new-water area when a before mask is given) inside each class of a class raster (e.g. land cover) on the same grid as the 0/1 water labels. Blocks grid mismatch, undeclared class values, invalid labels, geographic grids and area-distorting projections.",
+            parameters={
+                "type": "object",
+                "properties": {
+                    "after_path": {"type": "string"},
+                    "before_path": {"type": "string"},
+                    "class_path": {"type": "string"},
+                    "classes": {"type": "array", "items": {"type": "object"}},
+                    "output_path": {"type": "string"},
+                },
+                "required": ["after_path", "class_path", "classes"],
+            },
+            requires_connection=False,
+        ),
+        water_by_class_handler,
+    )
+    registrar.tool(
+        ToolSpec(
+            slug="geo_water.compare_with_reference",
+            name="Compare Water With Reference",
+            description="Agreement between a predicted 0/1 water raster and a 0/1 reference raster on the same grid: precision, recall, F1, IoU and areas of agreement, predicted-only and reference-only water. Blocks grid mismatch, invalid labels, geographic grids and area-distorting projections.",
+            parameters={
+                "type": "object",
+                "properties": {
+                    "predicted_path": {"type": "string"},
+                    "reference_path": {"type": "string"},
+                    "output_path": {"type": "string"},
+                },
+                "required": ["predicted_path", "reference_path"],
+            },
+            requires_connection=False,
+        ),
+        compare_with_reference_handler,
     )
